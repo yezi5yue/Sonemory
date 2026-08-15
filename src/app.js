@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { mergePackUpdate, packFromCsv, packToCsv, stableId, validatePack } from "./content.js?v=0.4.0";
-import { detectCommand, evaluateAnswer, SessionEngine } from "./engine.js?v=0.4.0";
-import { expandSpeechNotation, speechForms, toSpelling } from "./notation.js?v=0.4.0";
-import { samplePack } from "./sample-pack.js?v=0.4.0";
-import { BrowserRecognizer, BrowserSpeaker, GatewayRecognizer, GatewaySpeaker, validateSpeechEndpoint } from "./speech.js?v=0.4.0";
-import { store } from "./storage.js?v=0.4.0";
+import { mergePackUpdate, packFromCsv, packToCsv, stableId, validatePack } from "./content.js?v=0.5.0";
+import { importedFileToCsv } from "./importers.js?v=0.5.0";
+import { detectCommand, evaluateAnswer, SessionEngine } from "./engine.js?v=0.5.0";
+import { expandSpeechNotation, speechForms, toSpelling } from "./notation.js?v=0.5.0";
+import { samplePack } from "./sample-pack.js?v=0.5.0";
+import { BrowserRecognizer, BrowserSpeaker, GatewayRecognizer, GatewaySpeaker, validateSpeechEndpoint } from "./speech.js?v=0.5.0";
+import { store } from "./storage.js?v=0.5.0";
 
 const EMPTY_CSV = "word,meaning,partOfSpeech,unit,chunks,aliases,note,locale";
 const $ = (selector) => document.querySelector(selector);
@@ -32,6 +33,7 @@ const elements = {
   courseFilter: $("#course-filter"),
   courseOptions: $("#course-options"),
   studentPack: $("#student-pack"),
+  studentUnit: $("#student-unit"),
   selectionNote: $("#selection-note"),
   packBadge: $("#pack-badge"),
   commandButtons: $$('[data-command]'),
@@ -41,6 +43,10 @@ const elements = {
   subcategoryCategory: $("#subcategory-category"),
   subcategoryMessage: $("#subcategory-message"),
   courseForm: $("#course-form"),
+  editingCourseId: $("#editing-course-id"),
+  courseFormTitle: $("#course-form-title"),
+  cancelCourseEdit: $("#cancel-course-edit"),
+  saveCourse: $("#save-course"),
   courseCategory: $("#course-category"),
   courseSubcategory: $("#course-subcategory"),
   courseMessage: $("#course-message"),
@@ -53,9 +59,13 @@ const elements = {
   form: $("#pack-form"),
   formTitle: $("#pack-form-title"),
   editingPackId: $("#editing-pack-id"),
+  packCategory: $("#pack-category"),
+  packSubcategory: $("#pack-subcategory"),
   packCourse: $("#pack-course"),
   packFile: $("#pack-file"),
   csv: $("#csv-input"),
+  previewImport: $("#preview-import"),
+  importPreview: $("#import-preview"),
   cancelPackEdit: $("#cancel-pack-edit"),
   loadDemo: $("#load-demo"),
   importMessage: $("#import-message"),
@@ -75,6 +85,7 @@ const elements = {
 };
 
 let learningChoice = { categoryId: null, subcategoryId: null, courseId: null, packId: null };
+let learningUnit = "";
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -118,10 +129,40 @@ function namedOptions(items, placeholder) {
   return items.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
 }
 
+function coursePathOptions(courses, placeholder, library = store.getLibrary()) {
+  if (!courses.length) return `<option value="">${escapeHtml(placeholder)}</option>`;
+  return courses.map((course) => `<option value="${escapeHtml(course.id)}">${escapeHtml(`${coursePath(course, library)} / ${course.name}`)}</option>`).join("");
+}
+
 function coursePath(course, library = store.getLibrary()) {
   const category = library.categories.find((item) => item.id === course?.categoryId);
   const subcategory = library.subcategories.find((item) => item.id === course?.subcategoryId);
   return [category?.name, subcategory?.name].filter(Boolean).join(" / ");
+}
+
+function itemsForUnit(pack, unit = learningUnit) {
+  if (!pack?.items) return [];
+  return unit ? pack.items.filter((item) => item.unit === unit) : pack.items;
+}
+
+function unitOptions(pack) {
+  const counts = new Map();
+  for (const item of pack?.items ?? []) counts.set(item.unit, (counts.get(item.unit) ?? 0) + 1);
+  return [
+    `<option value="">全部内容（${pack?.items?.length ?? 0} 项）</option>`,
+    ...[...counts].map(([unit, count]) => `<option value="${escapeHtml(unit)}">${escapeHtml(unit)}（${count} 项）</option>`)
+  ].join("");
+}
+
+function progressSummary(pack, unit = learningUnit) {
+  const items = itemsForUnit(pack, unit);
+  const mastery = store.getProgress(pack.id).mastery ?? {};
+  const practiced = items.filter((item) => mastery[item.id]).length;
+  const review = items.filter((item) => {
+    const result = mastery[item.id];
+    return result && (result.incorrect ?? 0) > (result.correct ?? 0);
+  }).length;
+  return { total: items.length, practiced, review };
 }
 
 function renderCourseFormSubcategories(categoryId, preferredId = "") {
@@ -131,6 +172,64 @@ function renderCourseFormSubcategories(categoryId, preferredId = "") {
     ? preferredId
     : subcategories[0]?.id ?? "";
   elements.courseSubcategory.disabled = !subcategories.length;
+}
+
+function renderPackCourses(subcategoryId, preferredId = "") {
+  const courses = store.getCourses(subcategoryId);
+  elements.packCourse.innerHTML = namedOptions(courses, "当前子类暂无课程");
+  elements.packCourse.value = courses.some((item) => item.id === preferredId) ? preferredId : courses[0]?.id ?? "";
+  elements.packCourse.disabled = !courses.length;
+}
+
+function renderPackSubcategories(categoryId, preferredSubcategoryId = "", preferredCourseId = "") {
+  const subcategories = store.getSubcategories(categoryId);
+  elements.packSubcategory.innerHTML = namedOptions(subcategories, "当前大类暂无子类");
+  elements.packSubcategory.value = subcategories.some((item) => item.id === preferredSubcategoryId)
+    ? preferredSubcategoryId
+    : subcategories[0]?.id ?? "";
+  elements.packSubcategory.disabled = !subcategories.length;
+  renderPackCourses(elements.packSubcategory.value, preferredCourseId);
+}
+
+function setPackHierarchy(courseId = "") {
+  const library = store.getLibrary();
+  const course = library.courses.find((item) => item.id === courseId)
+    ?? library.courses.find((item) => item.subcategoryId === elements.packSubcategory.value)
+    ?? library.courses[0]
+    ?? null;
+  elements.packCategory.innerHTML = namedOptions(library.categories, "请先新建大类");
+  elements.packCategory.value = course?.categoryId ?? library.categories[0]?.id ?? "";
+  elements.packCategory.disabled = !library.categories.length;
+  renderPackSubcategories(elements.packCategory.value, course?.subcategoryId, course?.id);
+}
+
+function resetCourseForm({ categoryId = "", subcategoryId = "" } = {}) {
+  elements.courseForm.reset();
+  elements.editingCourseId.value = "";
+  elements.courseFormTitle.textContent = "新建课程";
+  elements.saveCourse.textContent = "添加课程";
+  elements.cancelCourseEdit.hidden = true;
+  elements.courseMessage.hidden = true;
+  const library = store.getLibrary();
+  elements.courseCategory.value = library.categories.some((item) => item.id === categoryId)
+    ? categoryId
+    : store.getSelection().categoryId ?? library.categories[0]?.id ?? "";
+  renderCourseFormSubcategories(elements.courseCategory.value, subcategoryId);
+}
+
+function editCourse(courseId) {
+  const course = store.getCourse(courseId);
+  if (!course) return;
+  elements.editingCourseId.value = course.id;
+  elements.courseCategory.value = course.categoryId;
+  renderCourseFormSubcategories(course.categoryId, course.subcategoryId);
+  elements.courseForm.elements.name.value = course.name;
+  elements.courseForm.elements.description.value = course.description ?? "";
+  elements.courseFormTitle.textContent = `编辑课程：${course.name}`;
+  elements.saveCourse.textContent = "保存课程";
+  elements.cancelCourseEdit.hidden = false;
+  elements.courseMessage.hidden = true;
+  elements.courseForm.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function closeCoursePicker() {
@@ -196,10 +295,15 @@ function renderSelection() {
     ? packs.map((candidate) => `<option value="${escapeHtml(candidate.id)}">${escapeHtml(candidate.title)}</option>`).join("")
     : '<option value="">当前课程暂无资料</option>';
   elements.studentPack.value = pack?.id ?? "";
+  const availableUnits = new Set((pack?.items ?? []).map((item) => item.unit));
+  if (learningUnit && !availableUnits.has(learningUnit)) learningUnit = "";
+  elements.studentUnit.innerHTML = pack ? unitOptions(pack) : '<option value="">请先选择内容资料</option>';
+  elements.studentUnit.value = learningUnit;
   elements.studentCategory.disabled = controller.running || !library.categories.length;
   elements.studentSubcategory.disabled = controller.running || !subcategories.length;
   elements.studentCourse.disabled = controller.running || !library.courses.length;
   elements.studentPack.disabled = controller.running || !course || !packs.length;
+  elements.studentUnit.disabled = controller.running || !pack;
   if (controller.running) closeCoursePicker();
 
   if (!pack) {
@@ -211,9 +315,10 @@ function renderSelection() {
     else elements.selectionNote.textContent = "请为当前课程导入内容资料。";
     if (!controller.running) elements.start.disabled = true;
   } else {
+    const progress = progressSummary(pack);
     elements.packBadge.textContent = `${category.name} · ${subcategory.name} · ${course.name} · ${pack.title}`;
     elements.packBadge.dataset.state = "ready";
-    elements.selectionNote.textContent = `${pack.source.publisher} · ${pack.source.edition} · ${pack.items.length} 个学习项`;
+    elements.selectionNote.textContent = `${pack.source.publisher} · ${pack.source.edition} · 本范围 ${progress.total} 项 · 已练习 ${progress.practiced} 项${progress.review ? ` · 待巩固 ${progress.review} 项` : ""}`;
     if (!controller.running) elements.start.disabled = false;
   }
   renderPackSummary(category, subcategory, course, pack);
@@ -224,6 +329,7 @@ function renderPackSummary(category, subcategory, course, pack) {
     elements.packSummary.innerHTML = "<p>尚未选择学习资料。请在资料管理页创建课程并导入内容。</p>";
     return;
   }
+  const progress = progressSummary(pack);
   elements.packSummary.innerHTML = `
     <dl class="summary-grid">
       <div><dt>大类</dt><dd>${escapeHtml(category?.name ?? "未分类")}</dd></div>
@@ -233,6 +339,9 @@ function renderPackSummary(category, subcategory, course, pack) {
       <div><dt>发布机构</dt><dd>${escapeHtml(pack.source.publisher)}</dd></div>
       <div><dt>版本</dt><dd>${escapeHtml(pack.source.edition)}</dd></div>
       <div><dt>学习项</dt><dd>${pack.items.length}</dd></div>
+      <div><dt>本次范围</dt><dd>${escapeHtml(learningUnit || "全部内容")} · ${progress.total} 项</dd></div>
+      <div><dt>已练习</dt><dd>${progress.practiced} 项</dd></div>
+      <div><dt>待巩固</dt><dd>${progress.review} 项</dd></div>
       <div><dt>最近更新</dt><dd>${new Date(pack.updatedAt ?? pack.importedAt).toLocaleDateString("zh-CN")}</dd></div>
     </dl>
     <p class="source-note">${escapeHtml(pack.source.reference || "未填写补充来源说明")}</p>`;
@@ -245,6 +354,7 @@ function renderLibrary({ keepFilter = true } = {}) {
   const previousSubcategoryCategoryId = keepFilter ? elements.subcategoryCategory.value : "";
   const previousCourseCategoryId = keepFilter ? elements.courseCategory.value : "";
   const previousCourseSubcategoryId = keepFilter ? elements.courseSubcategory.value : "";
+  const previousPackCourseId = keepFilter ? elements.packCourse.value : "";
   const filterCourseId = library.courses.some((course) => course.id === previousFilter)
     ? previousFilter
     : selection.courseId ?? library.courses[0]?.id ?? "";
@@ -274,7 +384,7 @@ function renderLibrary({ keepFilter = true } = {}) {
       <div><strong>${escapeHtml(course.name)}</strong><span>${escapeHtml(category?.name)} / ${escapeHtml(subcategory?.name)} · ${escapeHtml(course.description || "未填写课程说明")} · ${packCount} 份资料</span></div>
       <div class="inline-actions">
         <button type="button" data-course-action="select" data-course-id="${escapeHtml(course.id)}">选择</button>
-        <button type="button" data-course-action="rename" data-course-id="${escapeHtml(course.id)}">重命名</button>
+        <button type="button" data-course-action="edit" data-course-id="${escapeHtml(course.id)}">编辑归属</button>
         <button type="button" data-course-action="delete" data-course-id="${escapeHtml(course.id)}">删除</button>
       </div>
     </article>`;
@@ -302,26 +412,29 @@ function renderLibrary({ keepFilter = true } = {}) {
   elements.courseCategory.disabled = !library.categories.length;
   elements.courseSubcategory.disabled = !formSubcategories.length;
 
-  const options = namedOptions(library.courses, "请先新建课程");
+  const options = coursePathOptions(library.courses, "请先新建课程", library);
   elements.libraryCourseFilter.innerHTML = options;
   elements.libraryCourseFilter.value = filterCourseId;
   elements.libraryCourseFilter.disabled = !library.courses.length;
-  elements.packCourse.innerHTML = options;
-  elements.packCourse.disabled = !library.courses.length;
-  if (!elements.editingPackId.value || !library.courses.some((course) => course.id === elements.packCourse.value)) {
-    elements.packCourse.value = filterCourseId;
-  }
+  const editingPack = elements.editingPackId.value ? library.packs.find((pack) => pack.id === elements.editingPackId.value) : null;
+  const packCourseId = editingPack?.courseId
+    ?? (library.courses.some((course) => course.id === previousPackCourseId) ? previousPackCourseId : filterCourseId);
+  setPackHierarchy(packCourseId);
 
   const packs = library.packs.filter((pack) => pack.courseId === filterCourseId);
   elements.emptyLibrary.hidden = packs.length > 0;
-  elements.materialList.innerHTML = packs.map((pack) => `<article class="material-card${pack.id === selection.packId ? " is-selected" : ""}">
-    <div><strong>${escapeHtml(pack.title)}</strong><span>${pack.items.length} 项 · ${escapeHtml(pack.source.publisher)} · ${escapeHtml(pack.source.edition)}</span></div>
-    <div class="inline-actions">
-      <button type="button" data-material-action="select" data-pack-id="${escapeHtml(pack.id)}">用于学习</button>
-      <button type="button" data-material-action="edit" data-pack-id="${escapeHtml(pack.id)}">编辑内容</button>
-      <button type="button" data-material-action="delete" data-pack-id="${escapeHtml(pack.id)}">删除</button>
-    </div>
-  </article>`).join("");
+  elements.materialList.innerHTML = packs.map((pack) => {
+    const progress = progressSummary(pack, "");
+    return `<article class="material-card${pack.id === selection.packId ? " is-selected" : ""}">
+      <div><strong>${escapeHtml(pack.title)}</strong><span>${pack.items.length} 项 · ${escapeHtml(pack.source.publisher)} · ${escapeHtml(pack.source.edition)} · 已练习 ${progress.practiced} · 待巩固 ${progress.review}</span></div>
+      <div class="inline-actions">
+        <button type="button" data-material-action="select" data-pack-id="${escapeHtml(pack.id)}">用于学习</button>
+        <button type="button" data-material-action="edit" data-pack-id="${escapeHtml(pack.id)}">编辑内容</button>
+        <button type="button" data-material-action="export" data-pack-id="${escapeHtml(pack.id)}">导出 CSV</button>
+        <button type="button" data-material-action="delete" data-pack-id="${escapeHtml(pack.id)}">删除</button>
+      </div>
+    </article>`;
+  }).join("");
 
   syncLearningChoice();
   renderSelection();
@@ -334,15 +447,17 @@ function resetPackForm(courseId = null) {
   elements.formTitle.textContent = "导入新资料";
   elements.cancelPackEdit.hidden = true;
   elements.importMessage.hidden = true;
+  elements.importPreview.hidden = true;
+  elements.importPreview.innerHTML = "";
   const selectedCourseId = courseId ?? store.getSelection().courseId;
-  if (selectedCourseId) elements.packCourse.value = selectedCourseId;
+  setPackHierarchy(selectedCourseId);
 }
 
 function editPack(packId) {
   const pack = store.getPack(packId);
   if (!pack) return;
   elements.editingPackId.value = pack.id;
-  elements.packCourse.value = pack.courseId;
+  setPackHierarchy(pack.courseId);
   elements.form.elements.title.value = pack.title;
   elements.form.elements.publisher.value = pack.source.publisher;
   elements.form.elements.edition.value = pack.source.edition;
@@ -351,7 +466,40 @@ function editPack(packId) {
   elements.formTitle.textContent = `编辑资料：${pack.title}`;
   elements.cancelPackEdit.hidden = false;
   elements.importMessage.hidden = true;
+  elements.importPreview.hidden = true;
   elements.form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderImportPreview(sourceLabel = "当前内容") {
+  const preview = packFromCsv(elements.csv.value, {
+    title: "导入预览",
+    publisher: "导入预览",
+    edition: "导入预览",
+    locale: store.getSettings().voiceLocale
+  });
+  const rows = preview.items.slice(0, 5).map((item) => `<tr>
+    <td>${escapeHtml(item.word)}</td>
+    <td>${escapeHtml(item.meaning)}</td>
+    <td>${escapeHtml(item.partOfSpeech)}</td>
+    <td>${escapeHtml(item.unit)}</td>
+    <td>${escapeHtml(item.locale)}</td>
+  </tr>`).join("");
+  elements.importPreview.innerHTML = `<p><strong>${escapeHtml(sourceLabel)}</strong> · 校验通过，共 ${preview.items.length} 项${preview.items.length > 5 ? "，以下显示前 5 项" : ""}。</p>
+    <div class="import-preview-scroll"><table>
+      <thead><tr><th>word</th><th>meaning</th><th>partOfSpeech</th><th>unit</th><th>locale</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+  elements.importPreview.hidden = false;
+  return preview;
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function renderSettings() {
@@ -409,7 +557,7 @@ function renderHistory() {
       <div>
         <p class="history-date">${new Date(entry.completedAt).toLocaleString("zh-CN")}</p>
         <h3>${escapeHtml(entry.courseName
-          ? [entry.categoryName, entry.subcategoryName, entry.courseName, entry.packTitle].filter(Boolean).join(" · ")
+          ? [entry.categoryName, entry.subcategoryName, entry.courseName, entry.packTitle, entry.scopeName].filter(Boolean).join(" · ")
           : entry.packTitle)}</h3>
       </div>
       <dl>
@@ -431,6 +579,8 @@ class LearningController {
     this.recognizer = this.browserRecognizer;
     this.engine = null;
     this.pack = null;
+    this.learningItems = [];
+    this.unit = "";
     this.category = null;
     this.subcategory = null;
     this.course = null;
@@ -463,10 +613,16 @@ class LearningController {
     this.category = context.category;
     this.subcategory = context.subcategory;
     this.course = context.course;
+    this.unit = learningUnit;
+    this.learningItems = itemsForUnit(this.pack, this.unit);
     this.settings = store.getSettings();
     if (!this.pack) {
       setStatus("需要家长先选择学习资料", "打开资料管理，创建课程并导入内容。 ");
       switchView("library");
+      return;
+    }
+    if (!this.learningItems.length) {
+      setStatus("当前学习范围没有内容", "请重新选择学习范围，或检查导入资料中的 unit 列。 ");
       return;
     }
 
@@ -489,7 +645,7 @@ class LearningController {
     }
 
     if (this.settings.recognitionMode === "local-only") {
-      const locale = this.recognitionLocale(this.pack.items[0]);
+      const locale = this.recognitionLocale(this.learningItems[0]);
       const availability = await this.browserRecognizer.onDeviceAvailability(locale);
       if (availability !== "available") {
         setStatus("设备端语言包尚未就绪", "请在学习设置中检测并安装对应语言包，或改用自动回退模式。 ");
@@ -513,13 +669,15 @@ class LearningController {
     elements.studentSubcategory.disabled = true;
     elements.studentCourse.disabled = true;
     elements.studentPack.disabled = true;
+    elements.studentUnit.disabled = true;
     closeCoursePicker();
     await this.requestWakeLock();
 
     try {
       await this.say("Sonemory.", { lang: "en-US", rate: 0.92 }, runId);
       await this.say("声声入忆，语音陪学。", { lang: "zh-CN", rate: 1 }, runId);
-      await this.say(`本次学习，${this.course?.name ?? "当前课程"}，${this.pack.title}。`, { lang: "zh-CN", rate: 1 }, runId);
+      const scopeDescription = this.unit ? `，${this.unit}` : "，全部内容";
+      await this.say(`本次学习，${this.course?.name ?? "当前课程"}，${this.pack.title}${scopeDescription}。`, { lang: "zh-CN", rate: 1 }, runId);
       await this.say(`今天学习${this.engine.queue.filter((entry) => entry.kind === "new").length}个单词。学习中可以说，重复，慢一点，拼读，不会，暂停或结束。`, { lang: "zh-CN", rate: 1 }, runId);
       await this.run(runId);
     } catch (error) {
@@ -571,8 +729,8 @@ class LearningController {
 
   prepareEngine() {
     const stored = store.getSession();
-    if (stored?.packId === this.pack.id && stored.itemIds?.length && !stored.completed) {
-      const items = stored.itemIds.map((id) => this.pack.items.find((item) => item.id === id)).filter(Boolean);
+    if (stored?.packId === this.pack.id && (stored.unit ?? "") === this.unit && stored.itemIds?.length && !stored.completed) {
+      const items = stored.itemIds.map((id) => this.learningItems.find((item) => item.id === id)).filter(Boolean);
       if (items.length) {
         this.engine = new SessionEngine({ items, retryGap: this.settings.retryGap, maxRetries: 1, snapshot: stored.engine });
         this.startedAt = stored.startedAt;
@@ -581,8 +739,8 @@ class LearningController {
     }
 
     const progress = store.getProgress(this.pack.id);
-    const count = Math.min(this.settings.dailyCount, this.pack.items.length);
-    const items = Array.from({ length: count }, (_, index) => this.pack.items[(progress.nextOffset + index) % this.pack.items.length]);
+    const count = Math.min(this.settings.dailyCount, this.learningItems.length);
+    const items = Array.from({ length: count }, (_, index) => this.learningItems[(progress.nextOffset + index) % this.learningItems.length]);
     this.engine = new SessionEngine({ items, retryGap: this.settings.retryGap, maxRetries: 1 });
     this.startedAt = new Date().toISOString();
     this.saveSession();
@@ -811,6 +969,7 @@ class LearningController {
       courseName: this.course?.name,
       packId: this.pack.id,
       packTitle: this.pack.title,
+      scopeName: this.unit || "全部内容",
       startedAt: this.startedAt,
       completedAt: new Date().toISOString(),
       stats
@@ -819,7 +978,7 @@ class LearningController {
     const newCount = this.engine.queue.filter((entry) => entry.kind === "new").length;
     const mastery = { ...progress.mastery };
     for (const [itemId, result] of Object.entries(this.engine.results)) mastery[itemId] = result;
-    store.setProgress(this.pack.id, { nextOffset: (progress.nextOffset + newCount) % this.pack.items.length, mastery });
+    store.setProgress(this.pack.id, { nextOffset: (progress.nextOffset + newCount) % this.learningItems.length, mastery });
     store.clearSession();
     elements.start.textContent = "开始下一次学习";
     elements.pause.disabled = true;
@@ -844,6 +1003,7 @@ class LearningController {
     if (!this.engine || !this.pack) return;
     store.setSession({
       packId: this.pack.id,
+      unit: this.unit,
       itemIds: [...this.engine.items.keys()],
       engine: this.engine.snapshot(),
       startedAt: this.startedAt,
@@ -870,6 +1030,7 @@ elements.stop.addEventListener("click", () => controller.requestCommand("stop"))
 elements.commandButtons.forEach((button) => button.addEventListener("click", () => controller.requestCommand(button.dataset.command)));
 
 elements.studentCategory.addEventListener("change", () => {
+  learningUnit = "";
   const categoryId = elements.studentCategory.value || null;
   const subcategoryId = store.getSubcategories(categoryId)[0]?.id ?? null;
   learningChoice = { categoryId, subcategoryId, courseId: null, packId: null };
@@ -878,6 +1039,7 @@ elements.studentCategory.addEventListener("change", () => {
 });
 
 elements.studentSubcategory.addEventListener("change", () => {
+  learningUnit = "";
   learningChoice = {
     categoryId: elements.studentCategory.value || null,
     subcategoryId: elements.studentSubcategory.value || null,
@@ -895,7 +1057,14 @@ elements.studentCourse.addEventListener("click", () => {
 
 elements.studentPack.addEventListener("change", () => {
   if (!learningChoice.courseId || !elements.studentPack.value) return;
+  learningUnit = "";
   learningChoice = store.setSelection({ courseId: learningChoice.courseId, packId: elements.studentPack.value });
+  renderSelection();
+});
+
+elements.studentUnit.addEventListener("change", () => {
+  learningUnit = elements.studentUnit.value;
+  store.clearSession();
   renderSelection();
 });
 
@@ -915,6 +1084,7 @@ elements.courseFilter.addEventListener("keydown", (event) => {
 elements.courseOptions.addEventListener("click", (event) => {
   const button = event.target.closest("[data-course-option-id]");
   if (!button) return;
+  learningUnit = "";
   learningChoice = store.setSelection({ courseId: button.dataset.courseOptionId });
   closeCoursePicker();
   renderSelection();
@@ -1005,22 +1175,25 @@ elements.courseForm.addEventListener("submit", (event) => {
   event.preventDefault();
   try {
     const data = new FormData(elements.courseForm);
+    const existingId = elements.editingCourseId.value;
     const course = store.saveCourse({
-      id: makeId("course", data.get("name")),
+      id: existingId || makeId("course", data.get("name")),
       categoryId: data.get("categoryId"),
       subcategoryId: data.get("subcategoryId"),
       name: data.get("name"),
       description: data.get("description")
     });
     store.setSelection({ courseId: course.id });
-    elements.courseForm.reset();
-    showMessage(elements.courseMessage, `已创建课程“${course.name}”。`);
     renderLibrary({ keepFilter: false });
+    resetCourseForm({ categoryId: course.categoryId, subcategoryId: course.subcategoryId });
     resetPackForm(course.id);
+    showMessage(elements.courseMessage, `${existingId ? "已更新" : "已创建"}课程“${course.name}”及其归属。`);
   } catch (error) {
     showMessage(elements.courseMessage, error.message, "error");
   }
 });
+
+elements.cancelCourseEdit.addEventListener("click", () => resetCourseForm());
 
 elements.courseList.addEventListener("click", (event) => {
   const button = event.target.closest("[data-course-action]");
@@ -1033,10 +1206,9 @@ elements.courseList.addEventListener("click", (event) => {
       elements.libraryCourseFilter.value = course.id;
       resetPackForm(course.id);
     }
-    if (button.dataset.courseAction === "rename") {
-      const name = prompt("请输入新的课程名称：", course.name)?.trim();
-      if (!name || name === course.name) return;
-      store.saveCourse({ ...course, name });
+    if (button.dataset.courseAction === "edit") {
+      editCourse(course.id);
+      return;
     }
     if (button.dataset.courseAction === "delete") {
       if (!confirm(`确定删除课程“${course.name}”吗？只能删除没有资料的课程。`)) return;
@@ -1059,11 +1231,16 @@ elements.materialList.addEventListener("click", (event) => {
   const pack = store.getPack(button.dataset.packId);
   if (!pack) return;
   if (button.dataset.materialAction === "select") {
+    learningUnit = "";
     store.setSelection({ courseId: pack.courseId, packId: pack.id });
     renderLibrary();
     switchView("student");
   }
   if (button.dataset.materialAction === "edit") editPack(pack.id);
+  if (button.dataset.materialAction === "export") {
+    const safeName = pack.title.replace(/[\\/:*?"<>|]+/g, "-").trim() || "sonemory-material";
+    downloadBlob(new Blob([`\uFEFF${packToCsv(pack)}`], { type: "text/csv;charset=utf-8" }), `${safeName}.csv`);
+  }
   if (button.dataset.materialAction === "delete") {
     if (!confirm(`确定删除资料“${pack.title}”及其本地学习进度吗？此操作无法撤销。`)) return;
     store.deletePack(pack.id);
@@ -1072,9 +1249,38 @@ elements.materialList.addEventListener("click", (event) => {
   }
 });
 
+elements.packCategory.addEventListener("change", () => {
+  renderPackSubcategories(elements.packCategory.value);
+});
+
+elements.packSubcategory.addEventListener("change", () => {
+  renderPackCourses(elements.packSubcategory.value);
+});
+
 elements.packFile.addEventListener("change", async (event) => {
   const [file] = event.target.files;
-  if (file) elements.csv.value = await file.text();
+  if (!file) return;
+  try {
+    const imported = await importedFileToCsv(file);
+    elements.csv.value = imported.csv;
+    renderImportPreview(`${imported.format}${imported.sheetName ? ` · ${imported.sheetName}` : ""}`);
+    showMessage(elements.importMessage, `已读取 ${file.name}，共 ${imported.rowCount} 条数据；请核对预览后保存。`);
+  } catch (error) {
+    elements.importPreview.hidden = true;
+    showMessage(elements.importMessage, error.message, "error");
+  }
+});
+
+elements.csv.addEventListener("input", () => { elements.importPreview.hidden = true; });
+
+elements.previewImport.addEventListener("click", () => {
+  try {
+    renderImportPreview("粘贴或编辑内容");
+    showMessage(elements.importMessage, "内容格式校验通过，可以保存资料。 ");
+  } catch (error) {
+    elements.importPreview.hidden = true;
+    showMessage(elements.importMessage, error.message, "error");
+  }
 });
 
 elements.form.addEventListener("submit", (event) => {

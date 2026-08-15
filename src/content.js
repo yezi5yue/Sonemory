@@ -5,6 +5,7 @@
  */
 
 const REQUIRED_ITEM_FIELDS = ["word", "meaning"];
+const MAX_ITEMS = 10000;
 
 export function stableId(value) {
   let hash = 2166136261;
@@ -81,6 +82,7 @@ function normalizePastedRows(rows) {
 export function packFromCsv(text, metadata) {
   const rows = normalizePastedRows(parseCsv(text));
   if (rows.length < 2) throw new Error("CSV 至少需要表头和一条单词记录。");
+  if (rows.length - 1 > MAX_ITEMS) throw new Error(`单份资料最多支持 ${MAX_ITEMS} 条学习内容。`);
 
   const headers = rows[0].map((header) => header.trim());
   const requiredHeaders = ["word", "meaning"];

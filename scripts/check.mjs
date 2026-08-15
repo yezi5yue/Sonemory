@@ -19,6 +19,7 @@ const required = [
   "src/app.js",
   "src/content.js",
   "src/engine.js",
+  "src/importers.js",
   "src/notation.js",
   "src/sample-pack.js",
   "src/speech.js",
@@ -40,9 +41,13 @@ const required = [
   "docs/licensing-strategy.md",
   "docs/speech-roadmap.md",
   "docs/ai-speech-integration.md",
+  "docs/content-import.md",
+  "docs/product-gap-review.md",
   "docs/cla-operations.md",
   "docs/legal/ENTITY-CLA-TEMPLATE.md",
-  "docs/legal/COMMERCIAL-LICENSE-AGREEMENT-TEMPLATE.md"
+  "docs/legal/COMMERCIAL-LICENSE-AGREEMENT-TEMPLATE.md",
+  "templates/sonemory-import-template.csv",
+  "templates/sonemory-import-template.xlsx"
 ];
 
 const missing = required.filter((file) => !existsSync(file));
@@ -66,6 +71,7 @@ for (const id of [
   "student-subcategory",
   "student-course",
   "student-pack",
+  "student-unit",
   "course-filter",
   "course-options",
   "ai-gateway-settings",
@@ -76,7 +82,11 @@ for (const id of [
   "taxonomy-list",
   "material-list",
   "pack-form",
+  "pack-category",
+  "pack-subcategory",
   "csv-input",
+  "preview-import",
+  "import-preview",
   "settings-form",
   "prepare-local-speech",
   "history-list"

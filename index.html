@@ -13,7 +13,7 @@
     <title>Sonemory · 声声入忆</title>
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="./src/styles.css?v=0.4.0">
+    <link rel="stylesheet" href="./src/styles.css?v=0.5.0">
   </head>
   <body>
     <a class="skip-link" href="#main">跳到主要内容</a>
@@ -72,6 +72,9 @@
           </div>
           <label>内容资料
             <select id="student-pack" aria-label="选择内容资料"></select>
+          </label>
+          <label>学习范围
+            <select id="student-unit" aria-label="选择本次学习范围"></select>
           </label>
           <p id="selection-note">请先在资料管理中创建课程并导入内容。</p>
         </section>
@@ -145,12 +148,13 @@
             </form>
 
             <form id="course-form" class="settings-card compact-card">
-              <h3>新建课程</h3>
+              <input id="editing-course-id" name="courseId" type="hidden">
+              <div class="card-heading"><h3 id="course-form-title">新建课程</h3><button class="text-button" type="button" id="cancel-course-edit" hidden>取消编辑</button></div>
               <label>所属大类<select id="course-category" name="categoryId" required></select></label>
               <label>所属子类<select id="course-subcategory" name="subcategoryId" required></select></label>
               <label>课程名称<input id="course-name" name="name" required maxlength="60" placeholder="例如：八年级英语"></label>
               <label>课程说明<input id="course-description" name="description" maxlength="120" placeholder="例如：2026 秋季学期"></label>
-              <button class="primary-button" type="submit">添加课程</button>
+              <button class="primary-button" id="save-course" type="submit">添加课程</button>
               <p id="course-message" class="form-message" hidden></p>
             </form>
 
@@ -180,6 +184,8 @@
             <fieldset>
               <legend><span>1</span> 归属与来源</legend>
               <div class="field-grid">
+                <label>所属大类<select id="pack-category" required></select></label>
+                <label>所属子类<select id="pack-subcategory" required></select></label>
                 <label>所属课程<select id="pack-course" name="courseId" required></select></label>
                 <label>资料名称<input name="title" required placeholder="例如：Unit 1 单词"></label>
                 <label>发布机构/出版社<input name="publisher" required placeholder="请填写正式来源"></label>
@@ -190,14 +196,20 @@
             <fieldset>
               <legend><span>2</span> 内容材料</legend>
               <label class="file-drop" for="pack-file">
-                <input id="pack-file" type="file" accept=".csv,text/csv">
-                <strong>选择 CSV 文件</strong>
-                <span>或在下方粘贴内容。编辑已有资料时会显示当前完整内容。</span>
+                <input id="pack-file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                <strong>选择 CSV 或 XLSX 文件</strong>
+                <span>Excel 将读取第一个工作表；也可以在下方直接粘贴内容。</span>
               </label>
+              <div class="template-actions" aria-label="导入模板">
+                <a class="quiet-ink-button" href="./templates/sonemory-import-template.csv" download>下载 CSV 模板</a>
+                <a class="quiet-ink-button" href="./templates/sonemory-import-template.xlsx" download>下载 XLSX 模板</a>
+                <button class="text-button" type="button" id="preview-import">校验并预览</button>
+              </div>
               <label>CSV 内容
                 <textarea id="csv-input" spellcheck="false" rows="12">word,meaning,partOfSpeech,unit,chunks,aliases,note,locale</textarea>
               </label>
               <p class="field-help">必需列：<code>word</code>、<code>meaning</code>；词性可留空。支持逗号 CSV，也支持用 <code>|</code> 分隔的三列表格。</p>
+              <div id="import-preview" class="import-preview" hidden aria-live="polite"></div>
             </fieldset>
             <div class="form-actions">
               <button class="primary-button" type="submit">保存资料并设为学习内容</button>
@@ -317,10 +329,10 @@
 
     <footer>
       <p>Sonemory · Listen. Practice. Remember.</p>
-      <p><a href="https://github.com/yezi5yue/Sonemory/tree/v0.4.0" rel="noopener">对应源码</a> · <a href="./LICENSE">AGPL-3.0</a> · 可按许可证复制和修改 · 不提供担保</p>
+      <p><a href="https://github.com/yezi5yue/Sonemory/tree/v0.5.0" rel="noopener">对应源码</a> · <a href="./LICENSE">AGPL-3.0</a> · 可按许可证复制和修改 · 不提供担保</p>
       <p>商业授权另行签署 · 不内置教材 · 不保存原始录音</p>
     </footer>
 
-    <script type="module" src="./src/app.js?v=0.4.0"></script>
+    <script type="module" src="./src/app.js?v=0.5.0"></script>
   </body>
 </html>

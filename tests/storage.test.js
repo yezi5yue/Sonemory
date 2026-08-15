@@ -79,6 +79,19 @@ test("manages multiple courses, materials, and active selection", async () => {
       courseId: "english",
       packId: "words-1"
     });
+    const moved = store.saveCourse({
+      ...updated,
+      categoryId: "interest",
+      subcategoryId: "nature"
+    });
+    assert.equal(moved.categoryId, "interest");
+    assert.equal(store.getPack("words-1").courseId, "english");
+    assert.deepEqual(store.getSelection(), {
+      categoryId: "interest",
+      subcategoryId: "nature",
+      courseId: "english",
+      packId: "words-1"
+    });
     assert.throws(() => store.deleteCourse("english"), /先删除或移动/);
     assert.throws(() => store.deleteCategory("school"), /先删除/);
 

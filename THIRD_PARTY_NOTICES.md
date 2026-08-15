@@ -1,12 +1,12 @@
 # Third-party notices and dependency policy
 
-Version reviewed: Sonemory 0.4.0
+Version reviewed: Sonemory 0.5.0
 
 ## Current runtime inventory
 
-The current Sonemory MVP has no third-party package-manager runtime dependencies. It uses browser platform APIs, including Web Speech API capabilities supplied by the user's browser or operating system. Those external browser or operating-system services are not distributed as part of this repository and remain subject to their providers' terms and privacy behavior.
+The current Sonemory MVP has no third-party package-manager runtime dependencies. It uses browser platform APIs, including Web Speech API, Blob, and DecompressionStream capabilities supplied by the user's browser or operating system. Those external browser or operating-system services are not distributed as part of this repository and remain subject to their providers' terms and privacy behavior.
 
-The optional AI speech gateway is a protocol boundary only. No cloud SDK, speech model, voice or model weight is bundled in Sonemory v0.4. A user-selected gateway and its upstream provider remain separate components subject to their own terms, privacy behavior and licenses.
+The optional AI speech gateway is a protocol boundary only. No cloud SDK, speech model, voice or model weight is bundled in Sonemory v0.5. A user-selected gateway and its upstream provider remain separate components subject to their own terms, privacy behavior and licenses.
 
 Current project-authored assets and data:
 
@@ -14,6 +14,7 @@ Current project-authored assets and data:
 |---|---|---|
 | Application source, tests, styles, SVG icon | Project-authored | `AGPL-3.0-only` public path; separate commercial licensing may be available. |
 | Small demonstration vocabulary pack | Project-authored demonstration content | Included under the repository license; not derived from a textbook. |
+| CSV/XLSX import templates | Project-authored example content | Included under the repository license; generated with development tooling that is not shipped as a runtime dependency. |
 | User-imported learning material | Not distributed by the project | Rights remain with the user or original rights holder. |
 | GNU AGPL v3 license text | Free Software Foundation license document | Included verbatim as permitted by the license text. |
 | Individual and Entity CLA documents | Adapted from Project Harmony templates | Licensed separately under CC BY 3.0; provenance is stated in each CLA file. |
