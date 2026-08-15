@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { expandSpeechNotation, speechForms } from "./notation.js?v=0.5.0";
+import { expandSpeechNotation, speechForms } from "./notation.js?v=0.6.0";
 
 const COMMANDS = new Map([
   ["start", ["开始", "开始学习", "start"]],
@@ -15,6 +15,9 @@ const COMMANDS = new Map([
   ["meaning", ["什么意思", "解释", "释义", "meaning"]],
   ["unknown", ["不会", "不知道", "我不会", "I don't know"]],
   ["next", ["下一个", "跳过", "next", "skip"]],
+  ["retry", ["再试一次", "重新试", "重试", "try again", "retry"]],
+  ["mic-check", ["麦克风检测", "检查麦克风", "测试麦克风", "microphone check"]],
+  ["listen-only", ["只听跟读", "只听模式", "不用测试", "listen only"]],
   ["pause", ["暂停", "等一下", "pause"]],
   ["stop", ["结束", "停止", "退出", "stop", "finish"]]
 ]);
@@ -55,6 +58,32 @@ export function evaluateAnswer(item, transcript) {
   };
 }
 
+function normalizedResult(value = {}) {
+  return {
+    correct: Number(value.correct ?? 0),
+    incorrect: Number(value.incorrect ?? 0),
+    recognitionFailures: Number(value.recognitionFailures ?? 0),
+    assisted: Number(value.assisted ?? 0),
+    attempts: Number(value.attempts ?? 0),
+    lastOutcome: value.lastOutcome ?? null,
+    lastPracticedAt: value.lastPracticedAt ?? null
+  };
+}
+
+export function mergeMasteryResult(previous, current, completedAt = new Date().toISOString()) {
+  const before = normalizedResult(previous);
+  const latest = normalizedResult(current);
+  return {
+    correct: before.correct + latest.correct,
+    incorrect: before.incorrect + latest.incorrect,
+    recognitionFailures: before.recognitionFailures + latest.recognitionFailures,
+    assisted: before.assisted + latest.assisted,
+    attempts: before.attempts + latest.attempts,
+    lastOutcome: latest.lastOutcome ?? before.lastOutcome,
+    lastPracticedAt: completedAt
+  };
+}
+
 export class SessionEngine {
   constructor({ items, retryGap = 3, maxRetries = 1, snapshot = null }) {
     if (!Array.isArray(items) || !items.length) throw new Error("学习内容不能为空。");
@@ -63,8 +92,15 @@ export class SessionEngine {
     this.maxRetries = Math.max(0, maxRetries);
     this.queue = snapshot?.queue ?? items.map((item) => ({ itemId: item.id, kind: "new" }));
     this.cursor = snapshot?.cursor ?? 0;
-    this.results = snapshot?.results ?? {};
-    this.stats = snapshot?.stats ?? { correct: 0, incorrect: 0, followed: 0, recognitionFailures: 0 };
+    this.results = Object.fromEntries(Object.entries(snapshot?.results ?? {}).map(([id, result]) => [id, normalizedResult(result)]));
+    this.stats = {
+      correct: 0,
+      incorrect: 0,
+      followed: 0,
+      recognitionFailures: 0,
+      assisted: 0,
+      ...(snapshot?.stats ?? {})
+    };
   }
 
   get currentEntry() {
@@ -82,23 +118,42 @@ export class SessionEngine {
 
   markFollowed({ heard = true } = {}) {
     if (heard) this.stats.followed += 1;
-    else this.stats.recognitionFailures += 1;
+    else this.recordRecognitionFailure();
+  }
+
+  recordRecognitionFailure() {
+    this.stats.recognitionFailures += 1;
+    const itemId = this.currentEntry?.itemId;
+    if (itemId) {
+      const result = normalizedResult(this.results[itemId]);
+      result.recognitionFailures += 1;
+      result.lastOutcome = "recognition-failure";
+      this.results[itemId] = result;
+    }
   }
 
   completeCurrent({ correct, assisted = false, recognitionFailure = false }) {
     const entry = this.currentEntry;
     if (!entry) return;
-    const result = this.results[entry.itemId] ?? { correct: 0, incorrect: 0, recognitionFailures: 0, attempts: 0 };
+    const result = normalizedResult(this.results[entry.itemId]);
     result.attempts += 1;
     if (recognitionFailure) {
       result.recognitionFailures += 1;
+      result.lastOutcome = "recognition-failure";
       this.stats.recognitionFailures += 1;
       if (result.recognitionFailures <= this.maxRetries) this.scheduleRetry(entry.itemId);
     } else if (correct && !assisted) {
       result.correct += 1;
+      result.lastOutcome = "correct";
       this.stats.correct += 1;
+    } else if (assisted) {
+      result.assisted += 1;
+      result.lastOutcome = "assisted";
+      this.stats.assisted += 1;
+      if (result.assisted <= this.maxRetries) this.scheduleRetry(entry.itemId);
     } else {
       result.incorrect += 1;
+      result.lastOutcome = "incorrect";
       this.stats.incorrect += 1;
       if (result.incorrect <= this.maxRetries) this.scheduleRetry(entry.itemId);
     }

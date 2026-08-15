@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { detectCommand, evaluateAnswer, normalizeAnswer, SessionEngine } from "../src/engine.js";
+import { detectCommand, evaluateAnswer, mergeMasteryResult, normalizeAnswer, SessionEngine } from "../src/engine.js";
 
 const items = ["alpha", "bravo", "charlie", "delta"].map((word, index) => ({
   id: `item-${index}`,
@@ -20,6 +20,8 @@ test("voice commands only match complete phrases", () => {
   assert.equal(detectCommand("再说一遍。"), "repeat");
   assert.equal(detectCommand("Pause."), "pause");
   assert.equal(detectCommand("I don't know"), "unknown");
+  assert.equal(detectCommand("麦克风检测"), "mic-check");
+  assert.equal(detectCommand("只听跟读"), "listen-only");
   assert.equal(detectCommand("我不知道"), null);
   assert.equal(detectCommand("不知道"), "unknown");
 });
@@ -50,6 +52,31 @@ test("recognition failure is tracked separately from knowledge errors", () => {
   assert.equal(engine.stats.incorrect, 0);
   assert.equal(engine.stats.recognitionFailures, 1);
   assert.equal(engine.results["item-0"].incorrect, 0);
+});
+
+test("assisted answers are tracked separately from wrong answers", () => {
+  const engine = new SessionEngine({ items, retryGap: 2, maxRetries: 1 });
+  engine.completeCurrent({ correct: false, assisted: true });
+  assert.equal(engine.stats.incorrect, 0);
+  assert.equal(engine.stats.assisted, 1);
+  assert.equal(engine.results["item-0"].lastOutcome, "assisted");
+});
+
+test("mastery merge preserves cumulative reasons and latest outcome", () => {
+  const merged = mergeMasteryResult(
+    { correct: 2, incorrect: 1, recognitionFailures: 1, assisted: 0, attempts: 3, lastOutcome: "incorrect" },
+    { correct: 1, incorrect: 0, recognitionFailures: 0, assisted: 1, attempts: 2, lastOutcome: "correct" },
+    "2026-08-15T01:00:00.000Z"
+  );
+  assert.deepEqual(merged, {
+    correct: 3,
+    incorrect: 1,
+    recognitionFailures: 1,
+    assisted: 1,
+    attempts: 5,
+    lastOutcome: "correct",
+    lastPracticedAt: "2026-08-15T01:00:00.000Z"
+  });
 });
 
 test("retry count is capped to keep an independent session finite", () => {

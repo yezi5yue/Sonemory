@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   BrowserRecognizer,
+  diagnoseMicrophone,
   GatewayRecognizer,
   GatewaySpeaker,
   normalizeGatewayTranscript,
@@ -173,4 +174,23 @@ test("gateway speaker sends the Sonemory request and plays returned audio", asyn
     voice: "teacher",
     model: "clear-voice"
   });
+});
+
+test("microphone diagnostic confirms access and always stops tracks", async () => {
+  let stopped = false;
+  const result = await diagnoseMicrophone({
+    getUserMedia: async () => ({
+      getAudioTracks: () => [{ readyState: "live", enabled: true, label: "Test mic" }],
+      getTracks: () => [{ stop: () => { stopped = true; } }]
+    })
+  });
+  assert.equal(result.status, "ready");
+  assert.equal(stopped, true);
+});
+
+test("microphone diagnostic distinguishes denied permission", async () => {
+  const error = new Error("denied");
+  error.name = "NotAllowedError";
+  const result = await diagnoseMicrophone({ getUserMedia: async () => { throw error; } });
+  assert.equal(result.status, "denied");
 });

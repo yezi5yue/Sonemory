@@ -4,14 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { mergePackUpdate, packFromCsv, packToCsv, stableId, validatePack } from "./content.js?v=0.5.0";
-import { importedFileToCsv } from "./importers.js?v=0.5.0";
-import { detectCommand, evaluateAnswer, SessionEngine } from "./engine.js?v=0.5.0";
-import { expandSpeechNotation, speechForms, toSpelling } from "./notation.js?v=0.5.0";
-import { samplePack } from "./sample-pack.js?v=0.5.0";
-import { BrowserRecognizer, BrowserSpeaker, GatewayRecognizer, GatewaySpeaker, validateSpeechEndpoint } from "./speech.js?v=0.5.0";
-import { store } from "./storage.js?v=0.5.0";
+import { mergePackUpdate, packFromCsv, packToCsv, stableId, validatePack } from "./content.js?v=0.6.0";
+import { importedFileToCsv } from "./importers.js?v=0.6.0";
+import { detectCommand, evaluateAnswer, mergeMasteryResult, SessionEngine } from "./engine.js?v=0.6.0";
+import { expandSpeechNotation, speechForms, toSpelling } from "./notation.js?v=0.6.0";
+import { samplePack } from "./sample-pack.js?v=0.6.0";
+import { BrowserRecognizer, BrowserSpeaker, diagnoseMicrophone, GatewayRecognizer, GatewaySpeaker, validateSpeechEndpoint } from "./speech.js?v=0.6.0";
+import { store } from "./storage.js?v=0.6.0";
 
+const APP_VERSION = "0.6.0";
 const EMPTY_CSV = "word,meaning,partOfSpeech,unit,chunks,aliases,note,locale";
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -69,6 +70,11 @@ const elements = {
   cancelPackEdit: $("#cancel-pack-edit"),
   loadDemo: $("#load-demo"),
   importMessage: $("#import-message"),
+  masteryDialog: $("#mastery-dialog"),
+  masteryTitle: $("#mastery-title"),
+  masterySummary: $("#mastery-summary"),
+  masteryContent: $("#mastery-content"),
+  closeMastery: $("#close-mastery"),
   settingsForm: $("#settings-form"),
   settingsMessage: $("#settings-message"),
   prepareLocalSpeech: $("#prepare-local-speech"),
@@ -78,6 +84,12 @@ const elements = {
   aiAccessToken: $("#ai-access-token"),
   aiGatewayStatus: $("#ai-gateway-status"),
   testAiSpeech: $("#test-ai-speech"),
+  exportBackup: $("#export-backup"),
+  backupFile: $("#backup-file"),
+  backupPreview: $("#backup-preview"),
+  restoreMode: $("#restore-mode"),
+  restoreBackup: $("#restore-backup"),
+  backupMessage: $("#backup-message"),
   clearData: $("#clear-data"),
   packSummary: $("#pack-summary"),
   history: $("#history-list"),
@@ -86,6 +98,7 @@ const elements = {
 
 let learningChoice = { categoryId: null, subcategoryId: null, courseId: null, packId: null };
 let learningUnit = "";
+let pendingBackup = null;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -160,7 +173,7 @@ function progressSummary(pack, unit = learningUnit) {
   const practiced = items.filter((item) => mastery[item.id]).length;
   const review = items.filter((item) => {
     const result = mastery[item.id];
-    return result && (result.incorrect ?? 0) > (result.correct ?? 0);
+    return result && Number(result.incorrect ?? 0) + Number(result.assisted ?? 0) >= Math.max(1, Number(result.correct ?? 0));
   }).length;
   return { total: items.length, practiced, review };
 }
@@ -429,6 +442,7 @@ function renderLibrary({ keepFilter = true } = {}) {
       <div><strong>${escapeHtml(pack.title)}</strong><span>${pack.items.length} 项 · ${escapeHtml(pack.source.publisher)} · ${escapeHtml(pack.source.edition)} · 已练习 ${progress.practiced} · 待巩固 ${progress.review}</span></div>
       <div class="inline-actions">
         <button type="button" data-material-action="select" data-pack-id="${escapeHtml(pack.id)}">用于学习</button>
+        <button type="button" data-material-action="detail" data-pack-id="${escapeHtml(pack.id)}">学习明细</button>
         <button type="button" data-material-action="edit" data-pack-id="${escapeHtml(pack.id)}">编辑内容</button>
         <button type="button" data-material-action="export" data-pack-id="${escapeHtml(pack.id)}">导出 CSV</button>
         <button type="button" data-material-action="delete" data-pack-id="${escapeHtml(pack.id)}">删除</button>
@@ -562,11 +576,75 @@ function renderHistory() {
       </div>
       <dl>
         <div><dt>正确</dt><dd>${entry.stats.correct}</dd></div>
-        <div><dt>待巩固</dt><dd>${entry.stats.incorrect}</dd></div>
+        <div><dt>答错</dt><dd>${entry.stats.incorrect}</dd></div>
+        <div><dt>使用提示</dt><dd>${entry.stats.assisted ?? 0}</dd></div>
         <div><dt>跟读</dt><dd>${entry.stats.followed}</dd></div>
         <div><dt>未听清</dt><dd>${entry.stats.recognitionFailures}</dd></div>
       </dl>
     </article>`).join("");
+}
+
+function masteryOutcome(result) {
+  const labels = {
+    correct: "最近答对",
+    incorrect: "最近答错",
+    assisted: "最近使用提示",
+    "recognition-failure": "最近未听清"
+  };
+  if (labels[result?.lastOutcome]) return labels[result.lastOutcome];
+  const historicSignals = [result?.correct, result?.incorrect, result?.recognitionFailures, result?.assisted, result?.attempts]
+    .some((value) => Number(value ?? 0) > 0);
+  return historicSignals ? "已有历史记录" : "尚未练习";
+}
+
+function masteryRecommendation(result) {
+  const correct = Number(result?.correct ?? 0);
+  const incorrect = Number(result?.incorrect ?? 0);
+  const failures = Number(result?.recognitionFailures ?? 0);
+  const assisted = Number(result?.assisted ?? 0);
+  if (!correct && !incorrect && !failures && !assisted) return "尚未练习";
+  if (failures > correct + incorrect + assisted) return "优先检查麦克风或改用只听跟读";
+  if (assisted > 0 && correct === 0) return "提示后学习，建议安排独立重测";
+  if (incorrect >= correct) return "复习释义与发音后继续巩固";
+  return "表现较稳定，继续按计划复习";
+}
+
+function renderMasteryDetails(pack) {
+  const mastery = store.getProgress(pack.id).mastery ?? {};
+  const practiced = pack.items.filter((item) => {
+    const result = mastery[item.id];
+    return Number(result?.attempts ?? 0) + Number(result?.recognitionFailures ?? 0) > 0;
+  }).length;
+  const totals = Object.values(mastery).reduce((summary, result) => ({
+    correct: summary.correct + Number(result.correct ?? 0),
+    incorrect: summary.incorrect + Number(result.incorrect ?? 0),
+    recognitionFailures: summary.recognitionFailures + Number(result.recognitionFailures ?? 0),
+    assisted: summary.assisted + Number(result.assisted ?? 0)
+  }), { correct: 0, incorrect: 0, recognitionFailures: 0, assisted: 0 });
+  elements.masteryTitle.textContent = `${pack.title} · 逐项学习明细`;
+  elements.masterySummary.textContent = `共 ${pack.items.length} 项，已练习 ${practiced} 项；累计答对 ${totals.correct}、答错 ${totals.incorrect}、未听清 ${totals.recognitionFailures}、使用提示 ${totals.assisted}。`;
+  const rows = pack.items.map((item) => {
+    const result = mastery[item.id] ?? {};
+    const lastPracticed = result.lastPracticedAt
+      ? new Date(result.lastPracticedAt).toLocaleString("zh-CN")
+      : "-";
+    return `<tr>
+      <td><strong>${escapeHtml(item.word)}</strong><span>${escapeHtml(item.meaning)}</span></td>
+      <td>${escapeHtml(item.unit)}</td>
+      <td>${Number(result.correct ?? 0)}</td>
+      <td>${Number(result.incorrect ?? 0)}</td>
+      <td>${Number(result.recognitionFailures ?? 0)}</td>
+      <td>${Number(result.assisted ?? 0)}</td>
+      <td><strong>${masteryOutcome(result)}</strong><span>${escapeHtml(lastPracticed)}</span></td>
+      <td>${escapeHtml(masteryRecommendation(result))}</td>
+    </tr>`;
+  }).join("");
+  elements.masteryContent.innerHTML = `<div class="mastery-table-scroll"><table>
+    <thead><tr><th>学习项</th><th>范围</th><th>答对</th><th>答错</th><th>未听清</th><th>提示</th><th>最近结果</th><th>建议</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+  if (typeof elements.masteryDialog.showModal === "function") elements.masteryDialog.showModal();
+  else elements.masteryDialog.setAttribute("open", "");
 }
 
 class FlowInterrupted extends Error {}
@@ -592,6 +670,7 @@ class LearningController {
     this.startedAt = null;
     this.wakeLock = null;
     this.activeRunId = 0;
+    this.listenOnly = false;
   }
 
   configureSpeech(settings) {
@@ -639,12 +718,12 @@ class LearningController {
       return;
     }
 
-    if (!this.speaker.supported || !this.recognizer.supported) {
-      setStatus("当前浏览器缺少完整语音能力", "请使用支持语音播放和语音识别的最新版浏览器。 ");
+    if (!this.speaker.supported) {
+      setStatus("当前浏览器不能播放语音", "请使用支持语音播放的最新版浏览器。 ");
       return;
     }
 
-    if (this.settings.recognitionMode === "local-only") {
+    if (this.settings.recognitionMode === "local-only" && this.recognizer.supported) {
       const locale = this.recognitionLocale(this.learningItems[0]);
       const availability = await this.browserRecognizer.onDeviceAvailability(locale);
       if (availability !== "available") {
@@ -678,7 +757,8 @@ class LearningController {
       await this.say("声声入忆，语音陪学。", { lang: "zh-CN", rate: 1 }, runId);
       const scopeDescription = this.unit ? `，${this.unit}` : "，全部内容";
       await this.say(`本次学习，${this.course?.name ?? "当前课程"}，${this.pack.title}${scopeDescription}。`, { lang: "zh-CN", rate: 1 }, runId);
-      await this.say(`今天学习${this.engine.queue.filter((entry) => entry.kind === "new").length}个单词。学习中可以说，重复，慢一点，拼读，不会，暂停或结束。`, { lang: "zh-CN", rate: 1 }, runId);
+      if (!this.recognizer.supported) await this.enableListenOnly(runId, "当前语音识别不可用");
+      await this.say(`今天学习${this.engine.queue.filter((entry) => entry.kind === "new").length}个单词。学习中可以说，重复，慢一点，拼读，不会，麦克风检测，只听跟读，暂停或结束。`, { lang: "zh-CN", rate: 1 }, runId);
       await this.run(runId);
     } catch (error) {
       if (error instanceof FlowInterrupted) return;
@@ -707,6 +787,49 @@ class LearningController {
     this.ensureActive(runId);
   }
 
+  async wait(milliseconds, runId) {
+    this.ensureActive(runId);
+    await new Promise((resolve) => setTimeout(resolve, milliseconds));
+    this.ensureActive(runId);
+  }
+
+  async microphoneCheck(runId) {
+    this.ensureActive(runId);
+    setStatus("正在检查麦克风", "只检查设备和权限，不保存录音。", { listening: true });
+    const result = await diagnoseMicrophone();
+    this.ensureActive(runId);
+    setStatus("麦克风自检完成", result.message);
+    await this.say(result.speech, { lang: "zh-CN", rate: 1 }, runId);
+    return result;
+  }
+
+  async enableListenOnly(runId, reason = "连续识别失败") {
+    if (this.listenOnly) return;
+    this.listenOnly = true;
+    setStatus("已切换为只听跟读", `${reason}；本次会继续播放、留出作答时间，但不判断对错。`);
+    await this.say(`${reason}。现在临时切换为只听跟读。本次不判断对错，学习进度仍会保存。`, { lang: "zh-CN", rate: 1 }, runId);
+    this.saveSession();
+  }
+
+  async recognitionRecovery(item, runId) {
+    await this.say("连续两次没有听清。现在检查麦克风。", { lang: "zh-CN", rate: 1 }, runId);
+    await this.microphoneCheck(runId);
+    await this.say("请说，再试一次。或者说，只听跟读。如果仍然听不清，我会自动切换为只听跟读。", { lang: "zh-CN", rate: 0.96 }, runId);
+    setStatus("请选择语音恢复方式", "说“再试一次”或“只听跟读”；未识别到指令时会自动降级。", { listening: true });
+    const result = await this.listen(item);
+    const command = this.commandFrom(result);
+    if (command === "retry" || command === "mic-check") {
+      if (command === "mic-check") await this.microphoneCheck(runId);
+      return { action: "retry" };
+    }
+    if (command === "listen-only" || !result.transcript) {
+      await this.enableListenOnly(runId, command === "listen-only" ? "已收到只听跟读指令" : "恢复指令仍未识别");
+      return { action: "listen-only" };
+    }
+    if (command) return { action: "command", command };
+    return { action: "answer", result };
+  }
+
   spokenWord(item) {
     return speechForms(item.word)[0] ?? item.word;
   }
@@ -723,7 +846,7 @@ class LearningController {
   }
 
   recognitionPhrases(item) {
-    const commands = ["repeat", "slow down", "spell", "meaning", "I don't know", "skip", "pause", "stop"];
+    const commands = ["repeat", "slow down", "spell", "meaning", "I don't know", "skip", "try again", "microphone check", "listen only", "pause", "stop"];
     return [...new Set([item.word, ...(item.aliases ?? [])].flatMap(speechForms).concat(commands))];
   }
 
@@ -734,6 +857,7 @@ class LearningController {
       if (items.length) {
         this.engine = new SessionEngine({ items, retryGap: this.settings.retryGap, maxRetries: 1, snapshot: stored.engine });
         this.startedAt = stored.startedAt;
+        this.listenOnly = Boolean(stored.listenOnly);
         return;
       }
     }
@@ -743,6 +867,7 @@ class LearningController {
     const items = Array.from({ length: count }, (_, index) => this.learningItems[(progress.nextOffset + index) % this.learningItems.length]);
     this.engine = new SessionEngine({ items, retryGap: this.settings.retryGap, maxRetries: 1 });
     this.startedAt = new Date().toISOString();
+    this.listenOnly = false;
     this.saveSession();
   }
 
@@ -773,33 +898,80 @@ class LearningController {
       await this.say(spokenWord, { lang: item.locale, rate: 0.9 }, runId);
     }
     await this.say("请跟我读。", { lang: "zh-CN" }, runId);
-    setStatus("轮到你跟读", "说完后系统会自动继续。", { listening: true });
-    const result = await this.listen(item);
-    const command = this.commandFrom(result);
-    if (command) {
-      const outcome = await this.handleCommand(command, item, "follow", runId);
-      if (outcome === "retry-stage" && this.running) return this.teach(item, runId);
+    if (this.listenOnly) {
+      setStatus("只听跟读模式", "请跟读；系统会留出时间，但不判断发音。", { listening: true });
+      await this.wait(2200, runId);
       return;
     }
-    this.ensureActive(runId);
-    this.engine.markFollowed({ heard: Boolean(result.transcript) });
-    if (result.transcript) {
-      setStatus("已经听到你的跟读", `识别结果：${result.transcript}`);
-      await this.say("听到了。", { lang: "zh-CN", rate: 1.05 }, runId);
-    } else {
-      await this.say("这次没有听清，不记错。我们继续。", { lang: "zh-CN", rate: 1 }, runId);
+    setStatus("轮到你跟读", "说完后系统会自动继续。", { listening: true });
+    let emptyAttempts = 0;
+    while (this.running && !this.listenOnly) {
+      let result = await this.listen(item);
+      let command = this.commandFrom(result);
+      if (command) {
+        const outcome = await this.handleCommand(command, item, "follow", runId);
+        if (outcome === "retry-stage") continue;
+        return;
+      }
+      this.ensureActive(runId);
+      if (result.transcript) {
+        this.engine.markFollowed({ heard: true });
+        setStatus("已经听到你的跟读", `识别结果：${result.transcript}`);
+        await this.say("听到了。", { lang: "zh-CN", rate: 1.05 }, runId);
+        return;
+      }
+      emptyAttempts += 1;
+      if (emptyAttempts < 2) {
+        await this.say("我没有听清，请靠近麦克风再读一次。也可以说，只听跟读。", { lang: "zh-CN" }, runId);
+        continue;
+      }
+      this.engine.markFollowed({ heard: false });
+      const recovery = await this.recognitionRecovery(item, runId);
+      if (recovery.action === "retry") {
+        emptyAttempts = 0;
+        continue;
+      }
+      if (recovery.action === "listen-only") return;
+      if (recovery.action === "command") {
+        const outcome = await this.handleCommand(recovery.command, item, "follow", runId);
+        if (outcome === "retry-stage") {
+          emptyAttempts = 0;
+          continue;
+        }
+        return;
+      }
+      result = recovery.result;
+      command = this.commandFrom(result);
+      if (!command && result.transcript) {
+        this.engine.markFollowed({ heard: true });
+        await this.say("听到了。", { lang: "zh-CN", rate: 1.05 }, runId);
+        return;
+      }
     }
   }
 
+  async listenOnlyRecall(item, isRetry, runId) {
+    const prefix = isRetry ? "再来一次。" : "现在请回忆。";
+    setStatus("只听跟读模式", `${item.partOfSpeech} · ${item.meaning}；请先自己回答。`, { listening: true });
+    await this.say(`${prefix}${item.meaning}，英文怎么说？请先自己回答。`, { lang: "zh-CN", rate: 1 }, runId);
+    await this.wait(2800, runId);
+    this.engine.completeCurrent({ correct: false, assisted: true });
+    await this.say("现在核对答案。", { lang: "zh-CN" }, runId);
+    await this.say(this.spokenWord(item), { lang: item.locale, rate: 0.9 }, runId);
+    await this.say("请跟读一遍。", { lang: "zh-CN" }, runId);
+    await this.say(this.spokenWord(item), { lang: item.locale, rate: 0.88 }, runId);
+  }
+
   async recall(item, isRetry, runId) {
+    if (this.listenOnly) return this.listenOnlyRecall(item, isRetry, runId);
     let emptyAttempts = 0;
     while (this.running && !this.paused && !this.stopped) {
       const prefix = isRetry ? "再来一次。" : "现在请回忆。";
       setStatus("请回忆英文单词", `${item.partOfSpeech} · ${item.meaning}`);
       await this.say(`${prefix}${item.meaning}，英文怎么说？`, { lang: "zh-CN", rate: 1 }, runId);
       setStatus("正在听你的回答", "可以说“不知道”“重复”或“拼读”。", { listening: true });
-      const result = await this.listen(item);
-      const command = this.commandFrom(result);
+      let result = await this.listen(item);
+      let command = this.commandFrom(result);
       if (command) {
         const outcome = await this.handleCommand(command, item, "recall", runId);
         if (outcome === "ask-again") continue;
@@ -810,12 +982,31 @@ class LearningController {
       if (!result.transcript) {
         emptyAttempts += 1;
         if (emptyAttempts < 2) {
-          await this.say("我没有听清，请再说一次。", { lang: "zh-CN" }, runId);
+          await this.say("我没有听清，请靠近麦克风再说一次。也可以说，只听跟读。", { lang: "zh-CN" }, runId);
           continue;
         }
-        this.engine.completeCurrent({ correct: false, recognitionFailure: true });
-        await this.correct(item, "连续两次没有听清。这次不作为知识错误，但会稍后再练。", runId);
-        return;
+        this.engine.recordRecognitionFailure();
+        const recovery = await this.recognitionRecovery(item, runId);
+        if (recovery.action === "retry") {
+          emptyAttempts = 0;
+          continue;
+        }
+        if (recovery.action === "listen-only") return this.listenOnlyRecall(item, isRetry, runId);
+        if (recovery.action === "command") {
+          const outcome = await this.handleCommand(recovery.command, item, "recall", runId);
+          if (outcome === "ask-again") {
+            emptyAttempts = 0;
+            continue;
+          }
+          return;
+        }
+        result = recovery.result;
+        command = this.commandFrom(result);
+        if (command) {
+          const outcome = await this.handleCommand(command, item, "recall", runId);
+          if (outcome === "ask-again") continue;
+          return;
+        }
       }
 
       setStatus("已经收到回答", `识别结果：${result.transcript}`);
@@ -847,6 +1038,17 @@ class LearningController {
   async handleCommand(command, item, stage, runId) {
     if (command === "pause") { this.pause(); return "halt"; }
     if (command === "stop") { await this.stop(); return "halt"; }
+    if (command === "retry") return stage === "follow" ? "retry-stage" : "ask-again";
+    if (command === "mic-check") {
+      await this.microphoneCheck(runId);
+      await this.say("自检完成，请再试一次。", { lang: "zh-CN" }, runId);
+      return stage === "follow" ? "retry-stage" : "ask-again";
+    }
+    if (command === "listen-only") {
+      await this.enableListenOnly(runId, "已收到只听跟读指令");
+      if (stage === "recall") await this.listenOnlyRecall(item, false, runId);
+      return "advance";
+    }
     if (command === "repeat") {
       await this.say(stage === "follow" ? this.spokenWord(item) : `${item.meaning}，英文怎么说？`, {
         lang: stage === "follow" ? item.locale : "zh-CN", rate: 0.92
@@ -958,8 +1160,9 @@ class LearningController {
     this.running = false;
     document.body.classList.remove("audio-session", "is-listening");
     const stats = this.engine.stats;
-    setStatus("今天的学习完成了", `正确 ${stats.correct} 次，待巩固 ${stats.incorrect} 次。`);
-    await this.speaker.speak(`今天的学习完成了。正确${stats.correct}次，需要继续巩固${stats.incorrect}次。`, { lang: "zh-CN" });
+    const completedAt = new Date().toISOString();
+    setStatus("今天的学习完成了", `答对 ${stats.correct} 次，答错 ${stats.incorrect} 次，使用提示 ${stats.assisted ?? 0} 次。`);
+    await this.speaker.speak(`今天的学习完成了。答对${stats.correct}次，答错${stats.incorrect}次，使用提示${stats.assisted ?? 0}次。`, { lang: "zh-CN" });
     store.addHistory({
       categoryId: this.category?.id,
       categoryName: this.category?.name,
@@ -971,13 +1174,16 @@ class LearningController {
       packTitle: this.pack.title,
       scopeName: this.unit || "全部内容",
       startedAt: this.startedAt,
-      completedAt: new Date().toISOString(),
-      stats
+      completedAt,
+      stats,
+      itemResults: this.engine.results
     });
     const progress = store.getProgress(this.pack.id);
     const newCount = this.engine.queue.filter((entry) => entry.kind === "new").length;
     const mastery = { ...progress.mastery };
-    for (const [itemId, result] of Object.entries(this.engine.results)) mastery[itemId] = result;
+    for (const [itemId, result] of Object.entries(this.engine.results)) {
+      mastery[itemId] = mergeMasteryResult(mastery[itemId], result, completedAt);
+    }
     store.setProgress(this.pack.id, { nextOffset: (progress.nextOffset + newCount) % this.learningItems.length, mastery });
     store.clearSession();
     elements.start.textContent = "开始下一次学习";
@@ -1007,6 +1213,7 @@ class LearningController {
       itemIds: [...this.engine.items.keys()],
       engine: this.engine.snapshot(),
       startedAt: this.startedAt,
+      listenOnly: this.listenOnly,
       completed: this.engine.completed
     });
   }
@@ -1236,6 +1443,7 @@ elements.materialList.addEventListener("click", (event) => {
     renderLibrary();
     switchView("student");
   }
+  if (button.dataset.materialAction === "detail") renderMasteryDetails(pack);
   if (button.dataset.materialAction === "edit") editPack(pack.id);
   if (button.dataset.materialAction === "export") {
     const safeName = pack.title.replace(/[\\/:*?"<>|]+/g, "-").trim() || "sonemory-material";
@@ -1353,6 +1561,8 @@ elements.settingsForm.addEventListener("submit", (event) => {
 elements.settingsForm.elements.playbackMode.addEventListener("change", renderSpeechSettingsVisibility);
 elements.settingsForm.elements.recognitionMode.addEventListener("change", renderSpeechSettingsVisibility);
 
+elements.closeMastery.addEventListener("click", () => elements.masteryDialog.close());
+
 elements.testAiSpeech.addEventListener("click", async () => {
   elements.testAiSpeech.disabled = true;
   elements.aiGatewayStatus.textContent = "正在请求并播放测试语音…";
@@ -1399,8 +1609,69 @@ elements.prepareLocalSpeech.addEventListener("click", async () => {
   elements.prepareLocalSpeech.disabled = false;
 });
 
+elements.exportBackup.addEventListener("click", () => {
+  try {
+    const backup = store.createBackup(APP_VERSION);
+    const date = new Date().toISOString().slice(0, 10);
+    downloadBlob(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" }), `sonemory-backup-${date}.json`);
+    showMessage(elements.backupMessage, "完整本地备份已生成，请妥善保存。 ");
+  } catch (error) {
+    showMessage(elements.backupMessage, error.message, "error");
+  }
+});
+
+elements.backupFile.addEventListener("change", async (event) => {
+  const [file] = event.target.files;
+  pendingBackup = null;
+  elements.restoreBackup.disabled = true;
+  elements.backupPreview.hidden = true;
+  if (!file) return;
+  try {
+    if (file.size > 25 * 1024 * 1024) throw new Error("备份文件不能超过 25 MB。");
+    const preview = store.previewBackup(await file.text());
+    pendingBackup = preview.backup;
+    const { summary, conflicts } = preview;
+    elements.backupPreview.innerHTML = `<strong>预检通过</strong>
+      <p>导出时间：${escapeHtml(new Date(preview.backup.exportedAt).toLocaleString("zh-CN"))} · 应用版本：${escapeHtml(preview.backup.appVersion ?? "未知")}</p>
+      <p>${summary.categories} 个大类 · ${summary.subcategories} 个子类 · ${summary.courses} 门课程 · ${summary.packs} 份资料 · ${summary.items} 个学习项 · ${summary.history} 条记录</p>
+      <p>${conflicts.total ? `检测到 ${conflicts.total} 项同 ID 数据；合并时会保留本机版本。` : "未检测到同 ID 冲突。"}</p>`;
+    elements.backupPreview.hidden = false;
+    elements.restoreBackup.disabled = false;
+    showMessage(elements.backupMessage, "备份预检通过，请确认恢复方式。 ");
+  } catch (error) {
+    showMessage(elements.backupMessage, error.message, "error");
+  }
+});
+
+elements.restoreBackup.addEventListener("click", async () => {
+  if (!pendingBackup) return;
+  const mode = elements.restoreMode.value;
+  const warning = mode === "replace"
+    ? "替换恢复会用备份覆盖当前资料、设置、进度和记录。确定继续吗？"
+    : "合并恢复会导入新增数据，同 ID 内容保留本机版本。确定继续吗？";
+  if (!confirm(warning)) return;
+  try {
+    if (controller.running) await controller.stop();
+    store.restoreBackup(pendingBackup, { mode });
+    learningUnit = "";
+    learningChoice = store.getSelection();
+    pendingBackup = null;
+    elements.backupFile.value = "";
+    elements.restoreBackup.disabled = true;
+    elements.backupPreview.hidden = true;
+    renderSettings();
+    resetCourseForm();
+    resetPackForm();
+    renderLibrary({ keepFilter: false });
+    renderHistory();
+    showMessage(elements.backupMessage, `恢复完成：${mode === "replace" ? "已替换当前数据" : "已合并新增数据"}。`);
+  } catch (error) {
+    showMessage(elements.backupMessage, error.message, "error");
+  }
+});
+
 elements.clearData.addEventListener("click", () => {
-  if (!confirm("确定清除当前浏览器中的全部课程、资料、进度和学习记录吗？此操作无法撤销。")) return;
+  if (!confirm("确定清除当前浏览器中的全部课程、资料、进度和学习记录吗？建议先下载完整备份；清除后无法撤销。")) return;
   controller.requestCommand("stop");
   store.clearAll();
   resetPackForm();

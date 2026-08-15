@@ -13,7 +13,7 @@
     <title>Sonemory · 声声入忆</title>
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="./src/styles.css?v=0.5.0">
+    <link rel="stylesheet" href="./src/styles.css?v=0.6.0">
   </head>
   <body>
     <a class="skip-link" href="#main">跳到主要内容</a>
@@ -118,6 +118,9 @@
             <button data-command="spell"><strong>拼读</strong><span>播报字母拼写</span></button>
             <button data-command="meaning"><strong>什么意思</strong><span>重播词性释义</span></button>
             <button data-command="unknown"><strong>不会</strong><span>学习答案再重测</span></button>
+            <button data-command="retry"><strong>再试一次</strong><span>重新开启当前识别</span></button>
+            <button data-command="mic-check"><strong>麦克风检测</strong><span>检查设备与权限</span></button>
+            <button data-command="listen-only"><strong>只听跟读</strong><span>临时关闭答题判断</span></button>
             <button data-command="pause"><strong>暂停</strong><span>保留当前位置</span></button>
           </div>
         </section>
@@ -218,6 +221,14 @@
             <p id="import-message" class="form-message" hidden></p>
           </form>
         </div>
+        <dialog id="mastery-dialog" class="mastery-dialog" aria-labelledby="mastery-title">
+          <div class="dialog-heading">
+            <div><p class="eyebrow">Mastery detail</p><h2 id="mastery-title">逐项学习明细</h2></div>
+            <button class="quiet-ink-button" id="close-mastery" type="button">关闭</button>
+          </div>
+          <p id="mastery-summary" class="dialog-summary"></p>
+          <div id="mastery-content" class="mastery-content"></div>
+        </dialog>
       </section>
 
       <section class="view settings-view" data-view="settings" hidden>
@@ -309,6 +320,22 @@
             <h2>本地数据说明</h2>
             <div id="pack-summary"></div>
             <div class="privacy-box"><strong>默认不上传原始录音</strong><p>浏览器默认语音服务是否联网由浏览器实现决定；选择“仅设备端”后，识别必须在设备上完成。只有主动启用 AI 网关识别并确认提示后，作答音频才会发送到配置的服务。</p></div>
+            <section class="backup-panel" aria-labelledby="backup-title">
+              <h3 id="backup-title">完整本地备份</h3>
+              <p>备份包含资料库、设置、暂停会话、学习进度和最近记录，不包含临时 AI 令牌或原始录音。</p>
+              <button class="quiet-ink-button" id="export-backup" type="button">下载 JSON 备份</button>
+              <label class="quiet-ink-button file-button" for="backup-file">选择备份文件</label>
+              <input id="backup-file" class="visually-hidden" type="file" accept=".json,application/json">
+              <div id="backup-preview" class="backup-preview" hidden></div>
+              <label>恢复方式
+                <select id="restore-mode">
+                  <option value="replace">替换当前全部数据（推荐）</option>
+                  <option value="merge">合并新增，同 ID 保留本机数据</option>
+                </select>
+              </label>
+              <button class="primary-button" id="restore-backup" type="button" disabled>执行恢复</button>
+              <p id="backup-message" class="form-message" hidden></p>
+            </section>
             <button class="danger-button" id="clear-data" type="button">清除全部本地数据</button>
           </aside>
         </div>
@@ -329,10 +356,10 @@
 
     <footer>
       <p>Sonemory · Listen. Practice. Remember.</p>
-      <p><a href="https://github.com/yezi5yue/Sonemory/tree/v0.5.0" rel="noopener">对应源码</a> · <a href="./LICENSE">AGPL-3.0</a> · 可按许可证复制和修改 · 不提供担保</p>
+      <p><a href="https://github.com/yezi5yue/Sonemory/tree/v0.6.0" rel="noopener">对应源码</a> · <a href="./LICENSE">AGPL-3.0</a> · 可按许可证复制和修改 · 不提供担保</p>
       <p>商业授权另行签署 · 不内置教材 · 不保存原始录音</p>
     </footer>
 
-    <script type="module" src="./src/app.js?v=0.5.0"></script>
+    <script type="module" src="./src/app.js?v=0.6.0"></script>
   </body>
 </html>

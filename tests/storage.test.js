@@ -127,3 +127,32 @@ test("migrates v2 courses into a default category and subcategory", async () => 
     delete globalThis.localStorage;
   }
 });
+
+test("exports, previews, and restores a complete local backup", async () => {
+  const localStorage = new MemoryStorage();
+  globalThis.localStorage = localStorage;
+
+  try {
+    const { store } = await import(`../src/storage.js?backup=${Date.now()}`);
+    store.saveCategory({ id: "school", name: "学校课程" });
+    store.saveSubcategory({ id: "english", categoryId: "school", name: "英语" });
+    store.saveCourse({ id: "grade-8", categoryId: "school", subcategoryId: "english", name: "八年级英语" });
+    store.savePack({
+      id: "unit-1",
+      courseId: "grade-8",
+      title: "Unit 1",
+      items: [{ id: "teacher", word: "teacher", meaning: "教师" }]
+    });
+    store.setProgress("unit-1", { nextOffset: 1, mastery: { teacher: { correct: 2 } } });
+    const backup = store.createBackup("0.6.0");
+    assert.equal(store.previewBackup(backup).summary.items, 1);
+
+    store.saveCategory({ id: "temporary", name: "临时数据" });
+    store.restoreBackup(backup, { mode: "replace" });
+    assert.equal(store.getCategory("temporary"), null);
+    assert.equal(store.getPack("unit-1").title, "Unit 1");
+    assert.equal(store.getProgress("unit-1").mastery.teacher.correct, 2);
+  } finally {
+    delete globalThis.localStorage;
+  }
+});

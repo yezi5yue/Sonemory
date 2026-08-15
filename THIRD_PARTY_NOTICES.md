@@ -1,12 +1,12 @@
 # Third-party notices and dependency policy
 
-Version reviewed: Sonemory 0.5.0
+Version reviewed: Sonemory 0.6.0
 
 ## Current runtime inventory
 
 The current Sonemory MVP has no third-party package-manager runtime dependencies. It uses browser platform APIs, including Web Speech API, Blob, and DecompressionStream capabilities supplied by the user's browser or operating system. Those external browser or operating-system services are not distributed as part of this repository and remain subject to their providers' terms and privacy behavior.
 
-The optional AI speech gateway is a protocol boundary only. No cloud SDK, speech model, voice or model weight is bundled in Sonemory v0.5. A user-selected gateway and its upstream provider remain separate components subject to their own terms, privacy behavior and licenses.
+The optional AI speech gateway is a protocol boundary only. No cloud SDK, speech model, voice or model weight is bundled in Sonemory v0.6. A user-selected gateway and its upstream provider remain separate components subject to their own terms, privacy behavior and licenses.
 
 Current project-authored assets and data:
 

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { createBackup, mergeBackupData, previewBackup, validateBackup } from "./backup.js?v=0.6.0";
+
 const KEYS = {
   library: "sonemory.library.v3",
   selection: "sonemory.selection.v1",
@@ -180,6 +182,44 @@ function normalizeNamedRecord(value, extra = {}) {
   };
   if (!normalized.id || !normalized.name) throw new Error("名称不能为空。");
   return normalized;
+}
+
+function backupDataSnapshot() {
+  const library = ensureLibrary();
+  return {
+    library: structuredClone(library),
+    selection: resolvedSelection(library),
+    settings: { ...DEFAULT_SETTINGS, ...read(KEYS.settings, {}) },
+    session: read(KEYS.session),
+    history: read(KEYS.history, []),
+    progress: read(KEYS.progress, {})
+  };
+}
+
+function persistBackupData(data) {
+  write(KEYS.library, normalizeLibrary(data.library));
+  write(KEYS.settings, { ...DEFAULT_SETTINGS, ...(data.settings ?? {}) });
+  write(KEYS.history, Array.isArray(data.history) ? data.history.slice(0, 30) : []);
+  write(KEYS.progress, data.progress ?? {});
+  write(KEYS.selection, data.selection ?? {});
+  if (data.session) write(KEYS.session, data.session);
+  else localStorage.removeItem(KEYS.session);
+  const selection = resolvedSelection(normalizeLibrary(data.library));
+  write(KEYS.selection, selection);
+  return selection;
+}
+
+function withStorageRollback(operation) {
+  const previous = new Map(Object.values(KEYS).map((key) => [key, localStorage.getItem(key)]));
+  try {
+    return operation();
+  } catch (error) {
+    for (const [key, value] of previous) {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    }
+    throw new Error(`恢复失败，已保留原有数据：${error.message}`);
+  }
 }
 
 export const store = {
@@ -380,6 +420,18 @@ export const store = {
     const allProgress = read(KEYS.progress, {});
     allProgress[packId] = progress;
     write(KEYS.progress, allProgress);
+  },
+  createBackup(appVersion = "unknown") {
+    return createBackup(backupDataSnapshot(), { appVersion });
+  },
+  previewBackup(value) {
+    return previewBackup(value, backupDataSnapshot());
+  },
+  restoreBackup(value, { mode = "replace" } = {}) {
+    if (!["replace", "merge"].includes(mode)) throw new Error("请选择有效的恢复方式。");
+    const incoming = validateBackup(value).data;
+    const data = mode === "merge" ? mergeBackupData(backupDataSnapshot(), incoming) : incoming;
+    return withStorageRollback(() => persistBackupData(data));
   },
   clearAll() {
     const legacyKeys = Object.values(LEGACY_KEYS).flat();

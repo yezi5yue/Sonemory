@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-const CACHE = "sonemory-v0.5.0";
+const CACHE = "sonemory-v0.6.0";
 const ASSETS = [
   "./",
   "./index.html",
@@ -12,15 +12,16 @@ const ASSETS = [
   "./icon.svg",
   "./LICENSE",
   "./LICENSING.md",
-  "./src/styles.css?v=0.5.0",
-  "./src/app.js?v=0.5.0",
-  "./src/content.js?v=0.5.0",
-  "./src/engine.js?v=0.5.0",
-  "./src/importers.js?v=0.5.0",
-  "./src/notation.js?v=0.5.0",
-  "./src/sample-pack.js?v=0.5.0",
-  "./src/speech.js?v=0.5.0",
-  "./src/storage.js?v=0.5.0",
+  "./src/styles.css?v=0.6.0",
+  "./src/app.js?v=0.6.0",
+  "./src/backup.js?v=0.6.0",
+  "./src/content.js?v=0.6.0",
+  "./src/engine.js?v=0.6.0",
+  "./src/importers.js?v=0.6.0",
+  "./src/notation.js?v=0.6.0",
+  "./src/sample-pack.js?v=0.6.0",
+  "./src/speech.js?v=0.6.0",
+  "./src/storage.js?v=0.6.0",
   "./templates/sonemory-import-template.csv",
   "./templates/sonemory-import-template.xlsx"
 ];

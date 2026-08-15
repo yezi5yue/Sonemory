@@ -22,6 +22,7 @@ CSV / XLSX ──> 本地解析与预览 ──> 校验与标准化 ──> 大�
 - `src/speech.js`：浏览器语音合成、语音识别与能力检测的薄封装。
 - `src/speech.js` 同时实现 Speech Gateway Protocol v1 客户端；TTS 与 STT 可以独立切换到 AI/自托管网关，平台适配与长期密钥留在网关服务端。
 - `src/storage.js`：版本化的浏览器本地存储、旧资料库到四级内容模型的迁移、课程搜索与学习范围选择。
+- `src/backup.js`：完整本地备份的格式校验、引用预检、冲突摘要和保留本机的合并规则。
 - `src/app.js`：学生学习、资料管理、语音设置和报告视图的协调层。
 
 ## 内容资料模型
@@ -39,6 +40,14 @@ CSV / XLSX ──> 本地解析与预览 ──> 校验与标准化 ──> 大�
 单词依次经过 `intro → explain → chunk → imitate → recall → feedback`。答错或选择“不会”后，系统给出纠正示范，并把该词延迟放回队列。达到单次最大重试次数后结束本轮，避免无限循环。
 
 识别超时、无匹配或引擎错误记为 `recognitionFailures`，不会增加 `incorrect`。这是重要的产品边界：麦克风或识别器失败不等于孩子不会。
+
+提示、拼读、慢速示范和只听跟读记为 `assisted`，不再混入 `incorrect`。逐项进度累计 `correct`、`incorrect`、`recognitionFailures`、`assisted`、`attempts`、`lastOutcome` 和 `lastPracticedAt`；旧进度缺少的新字段按 0 或空值兼容。
+
+连续两次识别不到有效文本时，协调层会先执行只检查设备/权限的麦克风自检，再通过语音请求“再试一次”或“只听跟读”。恢复指令仍失败时，当前会话自动进入只听跟读：继续提示、留出回答时间并核对答案，但不做语音正确性判断。该状态写入暂停会话，恢复后保持一致。
+
+## 本地备份边界
+
+备份格式 `sonemory-local-backup` 当前 `schemaVersion` 为 1，包含 `library`、`selection`、`settings`、`session`、`history` 和 `progress`。恢复前必须验证资料库 schema、实体 ID 唯一性、大类/子类/课程/资料引用、学习项 ID、选择和暂停会话引用。替换恢复采用写入前快照，任何异常都会回滚；合并恢复只加入新 ID，同 ID 始终保留本机数据。临时 AI Token 从不进入设置存储，因此也不会进入备份。
 
 ## 内容边界
 

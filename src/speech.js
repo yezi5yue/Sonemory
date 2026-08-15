@@ -165,6 +165,46 @@ export class BrowserRecognizer {
   }
 }
 
+export async function diagnoseMicrophone(mediaDevices = globalThis.navigator?.mediaDevices) {
+  if (!mediaDevices?.getUserMedia) {
+    return {
+      status: "unsupported",
+      message: "当前浏览器不能执行麦克风自检。",
+      speech: "当前浏览器不能执行麦克风自检。"
+    };
+  }
+  let stream;
+  try {
+    stream = await mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
+    });
+    const tracks = stream.getAudioTracks?.() ?? [];
+    const ready = tracks.some((track) => track.readyState === "live" && track.enabled !== false);
+    if (!ready) {
+      return {
+        status: "unavailable",
+        message: "没有找到可用的麦克风音轨。",
+        speech: "没有找到可用的麦克风。"
+      };
+    }
+    const label = tracks.find((track) => track.label)?.label ?? "系统默认麦克风";
+    return {
+      status: "ready",
+      message: `麦克风可访问：${label}。自检只能确认设备和权限，不能保证识别准确率。`,
+      speech: "麦克风和权限正常，但仍可能受距离、噪声或识别服务影响。"
+    };
+  } catch (error) {
+    const denied = ["NotAllowedError", "SecurityError"].includes(error?.name);
+    return {
+      status: denied ? "denied" : "unavailable",
+      message: denied ? "麦克风权限未开启，请由家长在浏览器中允许麦克风。" : "麦克风暂时不可用，请检查设备连接。",
+      speech: denied ? "麦克风权限没有开启，请找家长帮忙。" : "麦克风暂时不可用。"
+    };
+  } finally {
+    stream?.getTracks?.().forEach((track) => track.stop());
+  }
+}
+
 export function validateSpeechEndpoint(value) {
   const input = String(value ?? "").trim();
   if (!input) return "";
