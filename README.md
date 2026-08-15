@@ -92,7 +92,7 @@ AI 语音接入使用统一网关协议，不把任何云平台 SDK 或模型绑
 4. 默认最小化儿童数据：不注册、不上传、不保存原始录音。
 5. 记忆策略逐步验证后再采用，不承诺未经测量的学习效果。
 
-更多细节见 [系统架构](docs/architecture.md)、[学习设计](docs/learning-design.md) 与 [学生/家长功能缺口评估](docs/product-gap-review.md)。
+更多细节见 [系统架构](docs/architecture.md)、[学习设计](docs/learning-design.md) 与 [学生/家长功能缺口评估](docs/product-gap-review.md)。后续维护者或 AI agent 请从 [项目交接文档](AGENTS.md) 开始。
 
 ## 路线图
 

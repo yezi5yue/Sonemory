@@ -12,6 +12,7 @@ import { samplePack } from "../src/sample-pack.js";
 
 const required = [
   "index.html",
+  "AGENTS.md",
   "manifest.webmanifest",
   "package.json",
   "server.mjs",
