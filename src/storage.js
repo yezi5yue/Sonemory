@@ -26,9 +26,16 @@ const LEGACY_KEYS = {
 const DEFAULT_SETTINGS = {
   dailyCount: 5,
   retryGap: 3,
+  playbackMode: "browser-tts",
   recognitionLocale: "auto",
   recognitionMode: "auto-local",
-  voiceLocale: "en-US"
+  voiceLocale: "en-US",
+  aiTtsEndpoint: "",
+  aiSttEndpoint: "",
+  aiTtsModel: "",
+  aiSttModel: "",
+  aiVoice: "",
+  allowExternalAudio: false
 };
 
 function migrateLegacyData() {

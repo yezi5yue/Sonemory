@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { expandSpeechNotation, speechForms } from "./notation.js?v=0.3.0";
+import { expandSpeechNotation, speechForms } from "./notation.js?v=0.4.0";
 
 const COMMANDS = new Map([
   ["start", ["开始", "开始学习", "start"]],

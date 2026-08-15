@@ -16,7 +16,7 @@ Sonemory 的主要问题不是“有没有语音识别”，而是儿童短词�
 
 “本地”主要提升隐私、断网能力和延迟可控性，并不自动等于准确率更高。准确率必须用 Sonemory 自己的儿童短词场景测量。
 
-## 已在 v0.2 实现
+## 已在 v0.2–v0.4 实现
 
 - 检测浏览器是否支持 `SpeechRecognition.available()` 与 `install()`；
 - 按语言检查、下载设备端语音包；
@@ -26,6 +26,12 @@ Sonemory 的主要问题不是“有没有语音识别”，而是儿童短词�
 - 向支持上下文偏置的识别器提供当前目标词、别名及常用英语指令；
 - 低置信度或连续未识别仍计为“未听清”，不计为知识错误；
 - 把识别等待上限从 11 秒缩短为 10 秒，暂停仍会立即中断识别。
+- 提供可分别启用的 AI / 自托管 TTS 与 STT 网关，不把任何云平台 SDK 或长期密钥写入浏览器；
+- AI STT 录音请求回声消除、降噪和自动增益，并使用轻量 VAD 提前结束单词录音；
+- AI STT 会传入当前目标词、别名和指令，便于网关映射为平台热词或提示；
+- 只有家长明确确认数据边界后才允许把孩子作答音频发送到外部网关。
+
+具体协议、平台比较与验收标准见 [AI 语音接入与选型](ai-speech-integration.md)。
 
 Chrome 139 开始提供设备端 Web Speech 能力，可查询语言支持、安装所需资源，并选择本地或默认处理；Web Speech 规范中的 `processLocally`、`available()` 和 `install()` 仍属于正在演进的浏览器能力，因此必须保留功能检测和回退。[Chrome 139 发布说明](https://developer.chrome.com/release-notes/139)、[Web Speech API 规范](https://w3c.github.io/speech-api/speechapi.html)、[设备端能力说明](https://github.com/WebAudio/web-speech-api/blob/main/explainers/on-device-speech-recognition.md)
 

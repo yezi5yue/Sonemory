@@ -13,7 +13,7 @@
     <title>Sonemory · 声声入忆</title>
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="./src/styles.css?v=0.3.0">
+    <link rel="stylesheet" href="./src/styles.css?v=0.4.0">
   </head>
   <body>
     <a class="skip-link" href="#main">跳到主要内容</a>
@@ -58,18 +58,21 @@
           <label>子类
             <select id="student-subcategory" aria-label="选择子类"></select>
           </label>
-          <label>课程
-            <select id="student-course" aria-label="选择课程"></select>
-          </label>
+          <div class="course-field">
+            <span class="field-label">课程</span>
+            <div class="course-picker">
+              <button id="student-course" class="course-picker-trigger" type="button" aria-haspopup="listbox" aria-controls="course-picker-popover" aria-expanded="false">
+                <span id="student-course-label">请选择课程</span><span aria-hidden="true">⌄</span>
+              </button>
+              <div id="course-picker-popover" class="course-picker-popover" hidden>
+                <input id="course-filter" type="search" autocomplete="off" aria-label="输入课程名称进行搜索" placeholder="输入课程名称">
+                <div id="course-options" class="course-options" role="listbox" aria-label="课程搜索结果"></div>
+              </div>
+            </div>
+          </div>
           <label>内容资料
             <select id="student-pack" aria-label="选择内容资料"></select>
           </label>
-          <div class="course-search">
-            <label>直接搜索课程
-              <input id="course-search" type="search" autocomplete="off" placeholder="输入课程名称或说明">
-            </label>
-            <div id="course-search-results" class="course-search-results" hidden></div>
-          </div>
           <p id="selection-note">请先在资料管理中创建课程并导入内容。</p>
         </section>
 
@@ -226,11 +229,18 @@
             <fieldset>
               <legend><span>2</span> 语音能力</legend>
               <div class="field-grid">
+                <label>语音播放引擎
+                  <select name="playbackMode">
+                    <option value="browser-tts">浏览器内置语音（默认）</option>
+                    <option value="ai-gateway">AI / 自托管语音网关</option>
+                  </select>
+                </label>
                 <label>识别引擎
                   <select name="recognitionMode">
                     <option value="auto-local">设备端优先，自动回退（推荐）</option>
                     <option value="local-only">仅使用设备端识别</option>
                     <option value="browser-service">使用浏览器默认识别服务</option>
+                    <option value="ai-gateway">AI / 自托管语音网关</option>
                   </select>
                 </label>
                 <label>识别语言
@@ -245,9 +255,38 @@
                   <select name="voiceLocale"><option value="en-US">美式英语</option><option value="en-GB">英式英语</option></select>
                 </label>
               </div>
-              <div class="speech-diagnostic">
+              <div id="browser-speech-settings" class="speech-diagnostic">
                 <div><strong>设备端语言包</strong><p id="speech-capability">尚未检测。</p></div>
                 <button class="quiet-ink-button" id="prepare-local-speech" type="button">检测并准备语言包</button>
+              </div>
+              <div id="ai-gateway-settings" class="ai-gateway-settings" hidden>
+                <div class="card-heading"><div><strong>AI 语音网关</strong><p>接入 Sonemory 协议兼容端点；云平台密钥应保存在网关服务端。</p></div><span>可插拔</span></div>
+                <div class="field-grid">
+                  <label>语音合成端点
+                    <input name="aiTtsEndpoint" type="url" inputmode="url" placeholder="例如：http://127.0.0.1:8787/tts">
+                  </label>
+                  <label>语音识别端点
+                    <input name="aiSttEndpoint" type="url" inputmode="url" placeholder="例如：http://127.0.0.1:8787/stt">
+                  </label>
+                  <label>TTS 模型 ID
+                    <input name="aiTtsModel" placeholder="例如：由网关映射的模型名称">
+                  </label>
+                  <label>STT 模型 ID
+                    <input name="aiSttModel" placeholder="例如：由网关映射的模型名称">
+                  </label>
+                  <label>发音人 / Voice ID
+                    <input name="aiVoice" placeholder="由网关或平台定义">
+                  </label>
+                  <label>临时访问令牌
+                    <input id="ai-access-token" type="password" autocomplete="off" placeholder="仅保留到当前页面关闭">
+                  </label>
+                </div>
+                <label class="consent-check"><input name="allowExternalAudio" type="checkbox">我了解：启用 AI 识别后，孩子的作答音频会发送到所配置的网关及其上游服务。</label>
+                <div class="speech-diagnostic">
+                  <div><strong>连接验证</strong><p id="ai-gateway-status">未测试。可先只启用 AI 播放，识别继续保留在设备端。</p></div>
+                  <button class="quiet-ink-button" id="test-ai-speech" type="button">测试 AI 发音</button>
+                </div>
+                <p class="field-help">仅允许 HTTPS，或本机的 HTTP 地址。跨域访问需由网关正确配置 CORS。接口协议见项目文档。</p>
               </div>
             </fieldset>
             <button class="primary-button" type="submit">保存学习设置</button>
@@ -257,7 +296,7 @@
             <p class="eyebrow">Local-first</p>
             <h2>本地数据说明</h2>
             <div id="pack-summary"></div>
-            <div class="privacy-box"><strong>默认不上传原始录音</strong><p>浏览器默认语音服务是否联网由浏览器实现决定；选择“仅设备端”后，识别必须在设备上完成。</p></div>
+            <div class="privacy-box"><strong>默认不上传原始录音</strong><p>浏览器默认语音服务是否联网由浏览器实现决定；选择“仅设备端”后，识别必须在设备上完成。只有主动启用 AI 网关识别并确认提示后，作答音频才会发送到配置的服务。</p></div>
             <button class="danger-button" id="clear-data" type="button">清除全部本地数据</button>
           </aside>
         </div>
@@ -278,10 +317,10 @@
 
     <footer>
       <p>Sonemory · Listen. Practice. Remember.</p>
-      <p><a href="https://github.com/yezi5yue/Sonemory/tree/v0.3.0" rel="noopener">对应源码</a> · <a href="./LICENSE">AGPL-3.0</a> · 可按许可证复制和修改 · 不提供担保</p>
+      <p><a href="https://github.com/yezi5yue/Sonemory/tree/v0.4.0" rel="noopener">对应源码</a> · <a href="./LICENSE">AGPL-3.0</a> · 可按许可证复制和修改 · 不提供担保</p>
       <p>商业授权另行签署 · 不内置教材 · 不保存原始录音</p>
     </footer>
 
-    <script type="module" src="./src/app.js?v=0.3.0"></script>
+    <script type="module" src="./src/app.js?v=0.4.0"></script>
   </body>
 </html>

@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { mergePackUpdate, packFromCsv, packToCsv, stableId, validatePack } from "./content.js?v=0.3.0";
-import { detectCommand, evaluateAnswer, SessionEngine } from "./engine.js?v=0.3.0";
-import { expandSpeechNotation, speechForms, toSpelling } from "./notation.js?v=0.3.0";
-import { samplePack } from "./sample-pack.js?v=0.3.0";
-import { BrowserRecognizer, BrowserSpeaker } from "./speech.js?v=0.3.0";
-import { store } from "./storage.js?v=0.3.0";
+import { mergePackUpdate, packFromCsv, packToCsv, stableId, validatePack } from "./content.js?v=0.4.0";
+import { detectCommand, evaluateAnswer, SessionEngine } from "./engine.js?v=0.4.0";
+import { expandSpeechNotation, speechForms, toSpelling } from "./notation.js?v=0.4.0";
+import { samplePack } from "./sample-pack.js?v=0.4.0";
+import { BrowserRecognizer, BrowserSpeaker, GatewayRecognizer, GatewaySpeaker, validateSpeechEndpoint } from "./speech.js?v=0.4.0";
+import { store } from "./storage.js?v=0.4.0";
 
 const EMPTY_CSV = "word,meaning,partOfSpeech,unit,chunks,aliases,note,locale";
 const $ = (selector) => document.querySelector(selector);
@@ -27,9 +27,11 @@ const elements = {
   studentCategory: $("#student-category"),
   studentSubcategory: $("#student-subcategory"),
   studentCourse: $("#student-course"),
+  studentCourseLabel: $("#student-course-label"),
+  coursePickerPopover: $("#course-picker-popover"),
+  courseFilter: $("#course-filter"),
+  courseOptions: $("#course-options"),
   studentPack: $("#student-pack"),
-  courseSearch: $("#course-search"),
-  courseSearchResults: $("#course-search-results"),
   selectionNote: $("#selection-note"),
   packBadge: $("#pack-badge"),
   commandButtons: $$('[data-command]'),
@@ -61,6 +63,11 @@ const elements = {
   settingsMessage: $("#settings-message"),
   prepareLocalSpeech: $("#prepare-local-speech"),
   speechCapability: $("#speech-capability"),
+  browserSpeechSettings: $("#browser-speech-settings"),
+  aiGatewaySettings: $("#ai-gateway-settings"),
+  aiAccessToken: $("#ai-access-token"),
+  aiGatewayStatus: $("#ai-gateway-status"),
+  testAiSpeech: $("#test-ai-speech"),
   clearData: $("#clear-data"),
   packSummary: $("#pack-summary"),
   history: $("#history-list"),
@@ -126,26 +133,33 @@ function renderCourseFormSubcategories(categoryId, preferredId = "") {
   elements.courseSubcategory.disabled = !subcategories.length;
 }
 
-function hideCourseSearchResults() {
-  elements.courseSearchResults.hidden = true;
-  elements.courseSearchResults.innerHTML = "";
+function closeCoursePicker() {
+  elements.coursePickerPopover.hidden = true;
+  elements.studentCourse.setAttribute("aria-expanded", "false");
+  elements.courseFilter.value = "";
 }
 
-function renderCourseSearchResults() {
-  const query = elements.courseSearch.value.trim();
-  if (!query) {
-    hideCourseSearchResults();
-    return;
-  }
+function renderCourseOptions() {
+  const query = elements.courseFilter.value.trim();
   const library = store.getLibrary();
-  const matches = store.searchCourses(query).slice(0, 8);
-  elements.courseSearchResults.innerHTML = matches.length
-    ? matches.map((course) => `<button type="button" data-search-course-id="${escapeHtml(course.id)}">
+  const matches = (query
+    ? store.searchCourses(query)
+    : library.courses.filter((course) => course.subcategoryId === learningChoice.subcategoryId)
+  ).slice(0, 10);
+  elements.courseOptions.innerHTML = matches.length
+    ? matches.map((course) => `<button type="button" role="option" aria-selected="${course.id === learningChoice.courseId}" data-course-option-id="${escapeHtml(course.id)}">
         <strong>${escapeHtml(course.name)}</strong>
         <span>${escapeHtml(coursePath(course, library))}${course.description ? ` · ${escapeHtml(course.description)}` : ""}</span>
       </button>`).join("")
-    : '<p class="course-search-empty">没有找到匹配课程</p>';
-  elements.courseSearchResults.hidden = false;
+    : `<p class="course-options-empty">${query ? "没有找到匹配课程" : "当前子类暂无课程，可输入名称跨分类搜索"}</p>`;
+}
+
+function openCoursePicker() {
+  if (elements.studentCourse.disabled) return;
+  elements.coursePickerPopover.hidden = false;
+  elements.studentCourse.setAttribute("aria-expanded", "true");
+  renderCourseOptions();
+  elements.courseFilter.focus();
 }
 
 function currentContext() {
@@ -177,19 +191,16 @@ function renderSelection() {
   elements.studentCategory.value = category?.id ?? "";
   elements.studentSubcategory.innerHTML = namedOptions(subcategories, "当前大类暂无子类");
   elements.studentSubcategory.value = subcategory?.id ?? "";
-  elements.studentCourse.innerHTML = courses.length
-    ? `<option value="">请选择课程</option>${namedOptions(courses, "")}`
-    : '<option value="">当前子类暂无课程</option>';
-  elements.studentCourse.value = course?.id ?? "";
+  elements.studentCourseLabel.textContent = course?.name ?? "请选择课程";
   elements.studentPack.innerHTML = packs.length
     ? packs.map((candidate) => `<option value="${escapeHtml(candidate.id)}">${escapeHtml(candidate.title)}</option>`).join("")
     : '<option value="">当前课程暂无资料</option>';
   elements.studentPack.value = pack?.id ?? "";
   elements.studentCategory.disabled = controller.running || !library.categories.length;
   elements.studentSubcategory.disabled = controller.running || !subcategories.length;
-  elements.studentCourse.disabled = controller.running || !courses.length;
+  elements.studentCourse.disabled = controller.running || !library.courses.length;
   elements.studentPack.disabled = controller.running || !course || !packs.length;
-  elements.courseSearch.disabled = controller.running || !library.courses.length;
+  if (controller.running) closeCoursePicker();
 
   if (!pack) {
     elements.packBadge.textContent = course ? `${course.name} · 暂无资料` : "尚未选择学习资料";
@@ -347,12 +358,47 @@ function renderSettings() {
   const settings = store.getSettings();
   for (const [name, value] of Object.entries(settings)) {
     const field = elements.settingsForm.elements[name];
-    if (field) field.value = String(value);
+    if (!field) continue;
+    if (field.type === "checkbox") field.checked = Boolean(value);
+    else field.value = String(value);
   }
-  const recognizer = controller.recognizer;
+  renderSpeechSettingsVisibility();
+  const recognizer = controller.browserRecognizer;
   elements.speechCapability.textContent = recognizer.supportsOnDevice
     ? "浏览器支持设备端语音包检测；点击按钮检查所选语言。"
     : "当前浏览器不支持网页设备端语音包管理，可继续使用浏览器默认识别服务。";
+}
+
+function renderSpeechSettingsVisibility() {
+  const playbackMode = elements.settingsForm.elements.playbackMode.value;
+  const recognitionMode = elements.settingsForm.elements.recognitionMode.value;
+  const usesGateway = playbackMode === "ai-gateway" || recognitionMode === "ai-gateway";
+  elements.aiGatewaySettings.hidden = !usesGateway;
+  elements.browserSpeechSettings.hidden = recognitionMode === "ai-gateway";
+}
+
+function speechSettingsFromForm() {
+  const data = new FormData(elements.settingsForm);
+  const playbackMode = data.get("playbackMode");
+  const recognitionMode = data.get("recognitionMode");
+  const aiTtsEndpoint = String(data.get("aiTtsEndpoint") ?? "").trim();
+  const aiSttEndpoint = String(data.get("aiSttEndpoint") ?? "").trim();
+  if (playbackMode === "ai-gateway" && !aiTtsEndpoint) throw new Error("启用 AI 播放前，请填写语音合成端点。");
+  if (recognitionMode === "ai-gateway" && !aiSttEndpoint) throw new Error("启用 AI 识别前，请填写语音识别端点。");
+  return {
+    dailyCount: Number(data.get("dailyCount")),
+    retryGap: Number(data.get("retryGap")),
+    playbackMode,
+    recognitionMode,
+    recognitionLocale: data.get("recognitionLocale"),
+    voiceLocale: data.get("voiceLocale"),
+    aiTtsEndpoint: aiTtsEndpoint ? validateSpeechEndpoint(aiTtsEndpoint) : "",
+    aiSttEndpoint: aiSttEndpoint ? validateSpeechEndpoint(aiSttEndpoint) : "",
+    aiTtsModel: String(data.get("aiTtsModel") ?? "").trim(),
+    aiSttModel: String(data.get("aiSttModel") ?? "").trim(),
+    aiVoice: String(data.get("aiVoice") ?? "").trim(),
+    allowExternalAudio: data.get("allowExternalAudio") === "on"
+  };
 }
 
 function renderHistory() {
@@ -379,8 +425,10 @@ class FlowInterrupted extends Error {}
 
 class LearningController {
   constructor() {
-    this.speaker = new BrowserSpeaker();
-    this.recognizer = new BrowserRecognizer();
+    this.browserSpeaker = new BrowserSpeaker();
+    this.browserRecognizer = new BrowserRecognizer();
+    this.speaker = this.browserSpeaker;
+    this.recognizer = this.browserRecognizer;
     this.engine = null;
     this.pack = null;
     this.category = null;
@@ -394,6 +442,18 @@ class LearningController {
     this.startedAt = null;
     this.wakeLock = null;
     this.activeRunId = 0;
+  }
+
+  configureSpeech(settings) {
+    this.speaker.cancel();
+    this.recognizer.abort();
+    const token = elements.aiAccessToken.value;
+    this.speaker = settings.playbackMode === "ai-gateway"
+      ? new GatewaySpeaker({ endpoint: settings.aiTtsEndpoint, model: settings.aiTtsModel, voice: settings.aiVoice, token })
+      : this.browserSpeaker;
+    this.recognizer = settings.recognitionMode === "ai-gateway"
+      ? new GatewayRecognizer({ endpoint: settings.aiSttEndpoint, model: settings.aiSttModel, token })
+      : this.browserRecognizer;
   }
 
   async start() {
@@ -410,6 +470,19 @@ class LearningController {
       return;
     }
 
+    if (this.settings.recognitionMode === "ai-gateway" && !this.settings.allowExternalAudio) {
+      setStatus("尚未同意发送作答音频", "请由家长在学习设置中确认 AI 识别的数据边界。 ");
+      switchView("settings");
+      return;
+    }
+    try {
+      this.configureSpeech(this.settings);
+    } catch (error) {
+      setStatus("AI 语音配置不完整", error.message);
+      switchView("settings");
+      return;
+    }
+
     if (!this.speaker.supported || !this.recognizer.supported) {
       setStatus("当前浏览器缺少完整语音能力", "请使用支持语音播放和语音识别的最新版浏览器。 ");
       return;
@@ -417,7 +490,7 @@ class LearningController {
 
     if (this.settings.recognitionMode === "local-only") {
       const locale = this.recognitionLocale(this.pack.items[0]);
-      const availability = await this.recognizer.onDeviceAvailability(locale);
+      const availability = await this.browserRecognizer.onDeviceAvailability(locale);
       if (availability !== "available") {
         setStatus("设备端语言包尚未就绪", "请在学习设置中检测并安装对应语言包，或改用自动回退模式。 ");
         switchView("settings");
@@ -440,8 +513,7 @@ class LearningController {
     elements.studentSubcategory.disabled = true;
     elements.studentCourse.disabled = true;
     elements.studentPack.disabled = true;
-    elements.courseSearch.disabled = true;
-    hideCourseSearchResults();
+    closeCoursePicker();
     await this.requestWakeLock();
 
     try {
@@ -672,7 +744,9 @@ class LearningController {
 
   async listen(item) {
     const lang = this.recognitionLocale(item);
-    const processLocally = await this.recognizer.shouldProcessLocally(lang, this.settings.recognitionMode);
+    const processLocally = this.recognizer === this.browserRecognizer
+      ? await this.browserRecognizer.shouldProcessLocally(lang, this.settings.recognitionMode)
+      : false;
     return this.recognizer.listen({ lang, timeoutMs: 10000, phrases: this.recognitionPhrases(item), processLocally });
   }
 
@@ -799,8 +873,7 @@ elements.studentCategory.addEventListener("change", () => {
   const categoryId = elements.studentCategory.value || null;
   const subcategoryId = store.getSubcategories(categoryId)[0]?.id ?? null;
   learningChoice = { categoryId, subcategoryId, courseId: null, packId: null };
-  elements.courseSearch.value = "";
-  hideCourseSearchResults();
+  closeCoursePicker();
   renderSelection();
 });
 
@@ -811,45 +884,44 @@ elements.studentSubcategory.addEventListener("change", () => {
     courseId: null,
     packId: null
   };
-  elements.courseSearch.value = "";
-  hideCourseSearchResults();
+  closeCoursePicker();
   renderSelection();
 });
 
-elements.studentCourse.addEventListener("change", () => {
-  const courseId = elements.studentCourse.value;
-  elements.courseSearch.value = "";
-  hideCourseSearchResults();
-  if (!courseId) {
-    learningChoice = { ...learningChoice, courseId: null, packId: null };
-    renderSelection();
-    return;
-  }
-  learningChoice = store.setSelection({ courseId });
-  renderSelection();
+elements.studentCourse.addEventListener("click", () => {
+  if (elements.coursePickerPopover.hidden) openCoursePicker();
+  else closeCoursePicker();
 });
 
 elements.studentPack.addEventListener("change", () => {
-  if (!elements.studentCourse.value || !elements.studentPack.value) return;
-  learningChoice = store.setSelection({ courseId: elements.studentCourse.value, packId: elements.studentPack.value });
+  if (!learningChoice.courseId || !elements.studentPack.value) return;
+  learningChoice = store.setSelection({ courseId: learningChoice.courseId, packId: elements.studentPack.value });
   renderSelection();
 });
 
-elements.courseSearch.addEventListener("input", renderCourseSearchResults);
-elements.courseSearch.addEventListener("keydown", (event) => {
+elements.courseFilter.addEventListener("input", renderCourseOptions);
+elements.courseFilter.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeCoursePicker();
+    elements.studentCourse.focus();
+    return;
+  }
   if (event.key !== "Enter") return;
-  const firstResult = elements.courseSearchResults.querySelector("[data-search-course-id]");
+  const firstResult = elements.courseOptions.querySelector("[data-course-option-id]");
   if (!firstResult) return;
   event.preventDefault();
   firstResult.click();
 });
-elements.courseSearchResults.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-search-course-id]");
+elements.courseOptions.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-course-option-id]");
   if (!button) return;
-  learningChoice = store.setSelection({ courseId: button.dataset.searchCourseId });
-  elements.courseSearch.value = "";
-  hideCourseSearchResults();
+  learningChoice = store.setSelection({ courseId: button.dataset.courseOptionId });
+  closeCoursePicker();
   renderSelection();
+  elements.studentCourse.focus();
+});
+document.addEventListener("click", (event) => {
+  if (!elements.coursePickerPopover.hidden && !event.target.closest(".course-picker")) closeCoursePicker();
 });
 
 elements.categoryForm.addEventListener("submit", (event) => {
@@ -1064,15 +1136,39 @@ elements.loadDemo.addEventListener("click", () => {
 
 elements.settingsForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  const data = new FormData(elements.settingsForm);
-  store.setSettings({
-    dailyCount: Number(data.get("dailyCount")),
-    retryGap: Number(data.get("retryGap")),
-    recognitionMode: data.get("recognitionMode"),
-    recognitionLocale: data.get("recognitionLocale"),
-    voiceLocale: data.get("voiceLocale")
-  });
-  showMessage(elements.settingsMessage, "学习与语音设置已保存。 ");
+  try {
+    store.setSettings(speechSettingsFromForm());
+    showMessage(elements.settingsMessage, "学习与语音设置已保存。临时访问令牌不会写入本地存储。 ");
+  } catch (error) {
+    showMessage(elements.settingsMessage, error.message, "error");
+  }
+});
+
+elements.settingsForm.elements.playbackMode.addEventListener("change", renderSpeechSettingsVisibility);
+elements.settingsForm.elements.recognitionMode.addEventListener("change", renderSpeechSettingsVisibility);
+
+elements.testAiSpeech.addEventListener("click", async () => {
+  elements.testAiSpeech.disabled = true;
+  elements.aiGatewayStatus.textContent = "正在请求并播放测试语音…";
+  try {
+    const endpoint = validateSpeechEndpoint(elements.settingsForm.elements.aiTtsEndpoint.value);
+    if (!endpoint) throw new Error("请先填写语音合成端点。");
+    const speaker = new GatewaySpeaker({
+      endpoint,
+      model: elements.settingsForm.elements.aiTtsModel.value,
+      voice: elements.settingsForm.elements.aiVoice.value,
+      token: elements.aiAccessToken.value
+    });
+    await speaker.speak("Sonemory，AI 语音连接测试。", {
+      lang: elements.settingsForm.elements.voiceLocale.value,
+      rate: 0.95
+    });
+    elements.aiGatewayStatus.textContent = "AI 发音测试成功。";
+  } catch (error) {
+    elements.aiGatewayStatus.textContent = error.message || "AI 发音测试失败。";
+  } finally {
+    elements.testAiSpeech.disabled = false;
+  }
 });
 
 elements.prepareLocalSpeech.addEventListener("click", async () => {
@@ -1080,12 +1176,12 @@ elements.prepareLocalSpeech.addEventListener("click", async () => {
   const locale = localeField === "auto" ? elements.settingsForm.elements.voiceLocale.value : localeField;
   elements.prepareLocalSpeech.disabled = true;
   elements.speechCapability.textContent = `正在检测 ${locale} 设备端语言包…`;
-  const availability = await controller.recognizer.onDeviceAvailability(locale, { refresh: true });
+  const availability = await controller.browserRecognizer.onDeviceAvailability(locale, { refresh: true });
   if (availability === "available") {
     elements.speechCapability.textContent = `${locale} 设备端语言包已可用。`;
   } else if (["downloadable", "downloading"].includes(availability)) {
     elements.speechCapability.textContent = `正在安装 ${locale} 设备端语言包…`;
-    const installed = await controller.recognizer.installOnDevice(locale);
+    const installed = await controller.browserRecognizer.installOnDevice(locale);
     elements.speechCapability.textContent = installed
       ? `${locale} 语言包安装完成，可以选择“仅使用设备端识别”。`
       : `${locale} 语言包安装失败，请检查网络、浏览器版本或系统支持。`;
