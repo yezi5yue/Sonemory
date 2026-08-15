@@ -5,7 +5,7 @@
  */
 
 const KEYS = {
-  library: "sonemory.library.v2",
+  library: "sonemory.library.v3",
   selection: "sonemory.selection.v1",
   singlePack: "sonemory.pack.v1",
   settings: "sonemory.settings.v2",
@@ -14,6 +14,7 @@ const KEYS = {
   progress: "sonemory.progress.v1"
 };
 
+const OLD_LIBRARY_KEY = "sonemory.library.v2";
 const LEGACY_KEYS = {
   singlePack: ["openrecall.pack.v1"],
   settings: ["openrecall.settings.v2", "openrecall.settings.v1"],
@@ -36,9 +37,7 @@ function migrateLegacyData() {
     for (const [name, legacyKeys] of Object.entries(LEGACY_KEYS)) {
       const key = KEYS[name];
       if (localStorage.getItem(key) !== null) continue;
-      const legacyValue = legacyKeys
-        .map((legacyKey) => localStorage.getItem(legacyKey))
-        .find((value) => value !== null);
+      const legacyValue = legacyKeys.map((legacyKey) => localStorage.getItem(legacyKey)).find((value) => value !== null);
       if (legacyValue !== undefined) localStorage.setItem(key, legacyValue);
     }
   } catch {
@@ -62,15 +61,46 @@ function write(key, value) {
 }
 
 function emptyLibrary() {
-  return { schemaVersion: 2, courses: [], packs: [] };
+  return { schemaVersion: 3, categories: [], subcategories: [], courses: [], packs: [] };
 }
 
 function normalizeLibrary(value) {
   if (!value || typeof value !== "object") return emptyLibrary();
   return {
-    schemaVersion: 2,
-    courses: Array.isArray(value.courses) ? value.courses.filter((course) => course?.id && course?.name) : [],
-    packs: Array.isArray(value.packs) ? value.packs.filter((pack) => pack?.id && pack?.courseId) : []
+    schemaVersion: 3,
+    categories: Array.isArray(value.categories) ? value.categories.filter((item) => item?.id && item?.name) : [],
+    subcategories: Array.isArray(value.subcategories) ? value.subcategories.filter((item) => item?.id && item?.categoryId && item?.name) : [],
+    courses: Array.isArray(value.courses) ? value.courses.filter((item) => item?.id && item?.categoryId && item?.subcategoryId && item?.name) : [],
+    packs: Array.isArray(value.packs) ? value.packs.filter((item) => item?.id && item?.courseId) : []
+  };
+}
+
+function migratedTaxonomy(now) {
+  const category = { id: "category-migrated", name: "未分类", createdAt: now, updatedAt: now };
+  const subcategory = {
+    id: "subcategory-migrated",
+    categoryId: category.id,
+    name: "默认分类",
+    createdAt: now,
+    updatedAt: now
+  };
+  return { category, subcategory };
+}
+
+function migrateV2Library(value) {
+  const now = new Date().toISOString();
+  const { category, subcategory } = migratedTaxonomy(now);
+  return {
+    schemaVersion: 3,
+    categories: [category],
+    subcategories: [subcategory],
+    courses: (value?.courses ?? []).map((course) => ({
+      ...course,
+      categoryId: category.id,
+      subcategoryId: subcategory.id,
+      updatedAt: course.updatedAt ?? now
+    })),
+    packs: value?.packs ?? []
   };
 }
 
@@ -78,24 +108,36 @@ function ensureLibrary() {
   const stored = read(KEYS.library);
   if (stored) return normalizeLibrary(stored);
 
+  const oldLibrary = read(OLD_LIBRARY_KEY);
+  if (oldLibrary) {
+    const migrated = migrateV2Library(oldLibrary);
+    write(KEYS.library, migrated);
+    return migrated;
+  }
+
   const singlePack = read(KEYS.singlePack);
   if (!singlePack?.id) return emptyLibrary();
 
   const now = new Date().toISOString();
+  const { category, subcategory } = migratedTaxonomy(now);
   const course = {
     id: "course-migrated",
+    categoryId: category.id,
+    subcategoryId: subcategory.id,
     name: "默认课程",
     description: "由旧版本单词资料自动迁移",
     createdAt: now,
     updatedAt: now
   };
   const library = {
-    schemaVersion: 2,
+    schemaVersion: 3,
+    categories: [category],
+    subcategories: [subcategory],
     courses: [course],
     packs: [{ ...singlePack, courseId: course.id, updatedAt: singlePack.updatedAt ?? now }]
   };
   write(KEYS.library, library);
-  write(KEYS.selection, { courseId: course.id, packId: singlePack.id });
+  write(KEYS.selection, { categoryId: category.id, subcategoryId: subcategory.id, courseId: course.id, packId: singlePack.id });
   return library;
 }
 
@@ -104,43 +146,106 @@ function resolvedSelection(library = ensureLibrary()) {
   let course = library.courses.find((candidate) => candidate.id === stored.courseId);
   let pack = library.packs.find((candidate) => candidate.id === stored.packId);
 
-  if (pack && (!course || pack.courseId !== course.id)) {
-    course = library.courses.find((candidate) => candidate.id === pack.courseId);
-  }
-  if (!course) {
-    course = library.courses.find((candidate) => library.packs.some((packItem) => packItem.courseId === candidate.id)) ?? library.courses[0];
-  }
-  if (!pack || pack.courseId !== course?.id) {
-    pack = library.packs.find((candidate) => candidate.courseId === course?.id);
-  }
+  if (pack && (!course || pack.courseId !== course.id)) course = library.courses.find((candidate) => candidate.id === pack.courseId);
+  if (!course) course = library.courses.find((candidate) => library.packs.some((packItem) => packItem.courseId === candidate.id)) ?? library.courses[0];
+  if (!pack || pack.courseId !== course?.id) pack = library.packs.find((candidate) => candidate.courseId === course?.id);
 
-  return { courseId: course?.id ?? null, packId: pack?.id ?? null };
+  return {
+    categoryId: course?.categoryId ?? null,
+    subcategoryId: course?.subcategoryId ?? null,
+    courseId: course?.id ?? null,
+    packId: pack?.id ?? null
+  };
 }
 
 function persistLibrary(library) {
   write(KEYS.library, normalizeLibrary(library));
 }
 
+function normalizeNamedRecord(value, extra = {}) {
+  const now = new Date().toISOString();
+  const normalized = {
+    ...extra,
+    id: String(value.id ?? "").trim(),
+    name: String(value.name ?? "").trim(),
+    createdAt: value.createdAt ?? now,
+    updatedAt: now
+  };
+  if (!normalized.id || !normalized.name) throw new Error("名称不能为空。");
+  return normalized;
+}
+
 export const store = {
   getLibrary: () => structuredClone(ensureLibrary()),
-  getCourses: () => structuredClone(ensureLibrary().courses),
+  getCategories: () => structuredClone(ensureLibrary().categories),
+  getCategory(categoryId) {
+    return structuredClone(ensureLibrary().categories.find((item) => item.id === categoryId) ?? null);
+  },
+  saveCategory(category) {
+    const library = ensureLibrary();
+    const normalized = normalizeNamedRecord(category);
+    if (library.categories.some((item) => item.name === normalized.name && item.id !== normalized.id)) throw new Error("已经存在同名大类。");
+    const index = library.categories.findIndex((item) => item.id === normalized.id);
+    if (index >= 0) library.categories[index] = normalized;
+    else library.categories.push(normalized);
+    persistLibrary(library);
+    return structuredClone(normalized);
+  },
+  deleteCategory(categoryId) {
+    const library = ensureLibrary();
+    if (library.subcategories.some((item) => item.categoryId === categoryId)) throw new Error("请先删除大类下的子类。");
+    if (library.courses.some((item) => item.categoryId === categoryId)) throw new Error("请先删除或移动大类下的课程。");
+    library.categories = library.categories.filter((item) => item.id !== categoryId);
+    persistLibrary(library);
+  },
+  getSubcategories(categoryId = null) {
+    const items = ensureLibrary().subcategories;
+    return structuredClone(categoryId ? items.filter((item) => item.categoryId === categoryId) : items);
+  },
+  getSubcategory(subcategoryId) {
+    return structuredClone(ensureLibrary().subcategories.find((item) => item.id === subcategoryId) ?? null);
+  },
+  saveSubcategory(subcategory) {
+    const library = ensureLibrary();
+    const categoryId = String(subcategory.categoryId ?? "").trim();
+    if (!library.categories.some((item) => item.id === categoryId)) throw new Error("请选择有效大类。");
+    const normalized = normalizeNamedRecord(subcategory, { categoryId });
+    if (library.subcategories.some((item) => item.categoryId === categoryId && item.name === normalized.name && item.id !== normalized.id)) {
+      throw new Error("该大类下已经存在同名子类。");
+    }
+    const index = library.subcategories.findIndex((item) => item.id === normalized.id);
+    if (index >= 0) library.subcategories[index] = normalized;
+    else library.subcategories.push(normalized);
+    persistLibrary(library);
+    return structuredClone(normalized);
+  },
+  deleteSubcategory(subcategoryId) {
+    const library = ensureLibrary();
+    if (library.courses.some((item) => item.subcategoryId === subcategoryId)) throw new Error("请先删除或移动子类下的课程。");
+    library.subcategories = library.subcategories.filter((item) => item.id !== subcategoryId);
+    persistLibrary(library);
+  },
+  getCourses(subcategoryId = null) {
+    const items = ensureLibrary().courses;
+    return structuredClone(subcategoryId ? items.filter((item) => item.subcategoryId === subcategoryId) : items);
+  },
   getCourse(courseId) {
-    return structuredClone(ensureLibrary().courses.find((course) => course.id === courseId) ?? null);
+    return structuredClone(ensureLibrary().courses.find((item) => item.id === courseId) ?? null);
   },
   saveCourse(course) {
     const library = ensureLibrary();
-    const now = new Date().toISOString();
+    const categoryId = String(course.categoryId ?? "").trim();
+    const subcategoryId = String(course.subcategoryId ?? "").trim();
+    const subcategory = library.subcategories.find((item) => item.id === subcategoryId && item.categoryId === categoryId);
+    if (!subcategory) throw new Error("请选择匹配的大类和子类。");
     const normalized = {
-      id: String(course.id).trim(),
-      name: String(course.name).trim(),
-      description: String(course.description ?? "").trim(),
-      createdAt: course.createdAt ?? now,
-      updatedAt: now
+      ...normalizeNamedRecord(course, { categoryId, subcategoryId }),
+      description: String(course.description ?? "").trim()
     };
-    if (!normalized.id || !normalized.name) throw new Error("课程名称不能为空。");
-    const duplicate = library.courses.find((candidate) => candidate.name === normalized.name && candidate.id !== normalized.id);
-    if (duplicate) throw new Error("已经存在同名课程。");
-    const index = library.courses.findIndex((candidate) => candidate.id === normalized.id);
+    if (library.courses.some((item) => item.subcategoryId === subcategoryId && item.name === normalized.name && item.id !== normalized.id)) {
+      throw new Error("该子类下已经存在同名课程。");
+    }
+    const index = library.courses.findIndex((item) => item.id === normalized.id);
     if (index >= 0) library.courses[index] = normalized;
     else library.courses.push(normalized);
     persistLibrary(library);
@@ -154,6 +259,13 @@ export const store = {
     const selection = resolvedSelection(library);
     write(KEYS.selection, selection);
     return selection;
+  },
+  searchCourses(query) {
+    const needle = String(query ?? "").normalize("NFKC").trim().toLocaleLowerCase();
+    if (!needle) return [];
+    return structuredClone(ensureLibrary().courses.filter((course) =>
+      `${course.name} ${course.description ?? ""}`.normalize("NFKC").toLocaleLowerCase().includes(needle)
+    ));
   },
   getPacks(courseId = null) {
     const packs = ensureLibrary().packs;
@@ -173,14 +285,32 @@ export const store = {
     else library.packs.push(normalized);
     persistLibrary(library);
     const previous = resolvedSelection(library);
-    write(KEYS.selection, { courseId: normalized.courseId, packId: normalized.id });
+    const course = library.courses.find((item) => item.id === normalized.courseId);
+    write(KEYS.selection, {
+      categoryId: course.categoryId,
+      subcategoryId: course.subcategoryId,
+      courseId: course.id,
+      packId: normalized.id
+    });
     if (previous.packId === normalized.id) localStorage.removeItem(KEYS.session);
     return structuredClone(normalized);
   },
   setPack(pack) {
     const library = ensureLibrary();
-    let course = library.courses.find((candidate) => candidate.id === "course-default");
-    if (!course) course = this.saveCourse({ id: "course-default", name: "默认课程", description: "" });
+    let category = library.categories[0];
+    if (!category) category = this.saveCategory({ id: "category-default", name: "未分类" });
+    let subcategory = this.getSubcategories(category.id)[0];
+    if (!subcategory) subcategory = this.saveSubcategory({ id: "subcategory-default", categoryId: category.id, name: "默认分类" });
+    let course = this.getCourses(subcategory.id).find((item) => item.id === "course-default");
+    if (!course) {
+      course = this.saveCourse({
+        id: "course-default",
+        categoryId: category.id,
+        subcategoryId: subcategory.id,
+        name: "默认课程",
+        description: ""
+      });
+    }
     return this.savePack({ ...pack, courseId: course.id });
   },
   deletePack(packId) {
@@ -209,7 +339,12 @@ export const store = {
     let pack = packId ? library.packs.find((candidate) => candidate.id === packId && candidate.courseId === courseId) : null;
     if (!pack) pack = library.packs.find((candidate) => candidate.courseId === courseId);
     const previous = resolvedSelection(library);
-    const selection = { courseId, packId: pack?.id ?? null };
+    const selection = {
+      categoryId: course.categoryId,
+      subcategoryId: course.subcategoryId,
+      courseId: course.id,
+      packId: pack?.id ?? null
+    };
     write(KEYS.selection, selection);
     if (previous.packId !== selection.packId) localStorage.removeItem(KEYS.session);
     return selection;
@@ -241,6 +376,6 @@ export const store = {
   },
   clearAll() {
     const legacyKeys = Object.values(LEGACY_KEYS).flat();
-    [...Object.values(KEYS), ...legacyKeys].forEach((key) => localStorage.removeItem(key));
+    [...Object.values(KEYS), OLD_LIBRARY_KEY, ...legacyKeys].forEach((key) => localStorage.removeItem(key));
   }
 };

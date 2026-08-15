@@ -32,6 +32,8 @@ test("migrates legacy OpenRecall data to Sonemory keys", async () => {
     assert.equal(store.getPack().id, pack.id);
     assert.equal(store.getPack().courseId, "course-migrated");
     assert.equal(store.getCourses()[0].name, "默认课程");
+    assert.equal(store.getCategories()[0].name, "未分类");
+    assert.equal(store.getSubcategories()[0].name, "默认分类");
     assert.equal(store.getSettings().dailyCount, 3);
     assert.equal(localStorage.getItem("sonemory.pack.v1"), JSON.stringify(pack));
 
@@ -49,8 +51,12 @@ test("manages multiple courses, materials, and active selection", async () => {
 
   try {
     const { store } = await import(`../src/storage.js?library=${Date.now()}`);
-    store.saveCourse({ id: "english", name: "英语" });
-    store.saveCourse({ id: "science", name: "科学" });
+    store.saveCategory({ id: "school", name: "学校课程" });
+    store.saveCategory({ id: "interest", name: "兴趣拓展" });
+    store.saveSubcategory({ id: "languages", categoryId: "school", name: "语言" });
+    store.saveSubcategory({ id: "nature", categoryId: "interest", name: "自然科学" });
+    store.saveCourse({ id: "english", categoryId: "school", subcategoryId: "languages", name: "英语" });
+    store.saveCourse({ id: "science", categoryId: "interest", subcategoryId: "nature", name: "科学" });
     store.savePack({ id: "words-1", courseId: "english", title: "第一单元", items: [] });
     store.savePack({ id: "facts-1", courseId: "science", title: "声音知识点", items: [] });
 
@@ -58,13 +64,52 @@ test("manages multiple courses, materials, and active selection", async () => {
     assert.equal(store.getPack().title, "第一单元");
     assert.equal(store.getPacks("science")[0].title, "声音知识点");
 
-    const updated = store.saveCourse({ id: "english", name: "英语课程", description: "八年级" });
+    const updated = store.saveCourse({
+      id: "english",
+      categoryId: "school",
+      subcategoryId: "languages",
+      name: "英语课程",
+      description: "八年级"
+    });
     assert.equal(updated.name, "英语课程");
+    assert.equal(store.searchCourses("八年级")[0].id, "english");
+    assert.deepEqual(store.getSelection(), {
+      categoryId: "school",
+      subcategoryId: "languages",
+      courseId: "english",
+      packId: "words-1"
+    });
     assert.throws(() => store.deleteCourse("english"), /先删除或移动/);
+    assert.throws(() => store.deleteCategory("school"), /先删除/);
 
     store.deletePack("words-1");
     store.deleteCourse("english");
     assert.equal(store.getCourses().length, 1);
+  } finally {
+    delete globalThis.localStorage;
+  }
+});
+
+test("migrates v2 courses into a default category and subcategory", async () => {
+  const v2Library = {
+    schemaVersion: 2,
+    courses: [{ id: "course-1", name: "八年级英语", description: "" }],
+    packs: [{ id: "pack-1", courseId: "course-1", title: "Unit 1", items: [] }]
+  };
+  const localStorage = new MemoryStorage([
+    ["sonemory.library.v2", JSON.stringify(v2Library)],
+    ["sonemory.selection.v1", JSON.stringify({ courseId: "course-1", packId: "pack-1" })]
+  ]);
+  globalThis.localStorage = localStorage;
+
+  try {
+    const { store } = await import(`../src/storage.js?v2=${Date.now()}`);
+    const course = store.getCourse("course-1");
+    assert.equal(store.getCategories()[0].name, "未分类");
+    assert.equal(store.getSubcategories()[0].name, "默认分类");
+    assert.equal(course.categoryId, "category-migrated");
+    assert.equal(course.subcategoryId, "subcategory-migrated");
+    assert.equal(store.getPack().id, "pack-1");
   } finally {
     delete globalThis.localStorage;
   }

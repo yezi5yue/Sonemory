@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { mergePackUpdate, packFromCsv, packToCsv, stableId, validatePack } from "./content.js?v=0.2.0";
-import { detectCommand, evaluateAnswer, SessionEngine } from "./engine.js?v=0.2.0";
-import { expandSpeechNotation, speechForms, toSpelling } from "./notation.js?v=0.2.0";
-import { samplePack } from "./sample-pack.js?v=0.2.0";
-import { BrowserRecognizer, BrowserSpeaker } from "./speech.js?v=0.2.0";
-import { store } from "./storage.js?v=0.2.0";
+import { mergePackUpdate, packFromCsv, packToCsv, stableId, validatePack } from "./content.js?v=0.3.0";
+import { detectCommand, evaluateAnswer, SessionEngine } from "./engine.js?v=0.3.0";
+import { expandSpeechNotation, speechForms, toSpelling } from "./notation.js?v=0.3.0";
+import { samplePack } from "./sample-pack.js?v=0.3.0";
+import { BrowserRecognizer, BrowserSpeaker } from "./speech.js?v=0.3.0";
+import { store } from "./storage.js?v=0.3.0";
 
 const EMPTY_CSV = "word,meaning,partOfSpeech,unit,chunks,aliases,note,locale";
 const $ = (selector) => document.querySelector(selector);
@@ -24,13 +24,25 @@ const elements = {
   studentStatus: $("#student-status"),
   studentDetail: $("#student-detail"),
   studentProgress: $("#student-progress"),
+  studentCategory: $("#student-category"),
+  studentSubcategory: $("#student-subcategory"),
   studentCourse: $("#student-course"),
   studentPack: $("#student-pack"),
+  courseSearch: $("#course-search"),
+  courseSearchResults: $("#course-search-results"),
   selectionNote: $("#selection-note"),
   packBadge: $("#pack-badge"),
   commandButtons: $$('[data-command]'),
+  categoryForm: $("#category-form"),
+  categoryMessage: $("#category-message"),
+  subcategoryForm: $("#subcategory-form"),
+  subcategoryCategory: $("#subcategory-category"),
+  subcategoryMessage: $("#subcategory-message"),
   courseForm: $("#course-form"),
+  courseCategory: $("#course-category"),
+  courseSubcategory: $("#course-subcategory"),
   courseMessage: $("#course-message"),
+  taxonomyList: $("#taxonomy-list"),
   courseList: $("#course-list"),
   libraryCount: $("#library-count"),
   libraryCourseFilter: $("#library-course-filter"),
@@ -54,6 +66,8 @@ const elements = {
   history: $("#history-list"),
   emptyHistory: $("#empty-history")
 };
+
+let learningChoice = { categoryId: null, subcategoryId: null, courseId: null, packId: null };
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -92,55 +106,117 @@ function makeId(prefix, name) {
   return `${prefix}-${stableId(`${name}:${randomPart}`)}`;
 }
 
-function courseOptions(courses, placeholder = "请先新建课程") {
-  if (!courses.length) return `<option value="">${placeholder}</option>`;
-  return courses.map((course) => `<option value="${escapeHtml(course.id)}">${escapeHtml(course.name)}</option>`).join("");
+function namedOptions(items, placeholder) {
+  if (!items.length) return `<option value="">${escapeHtml(placeholder)}</option>`;
+  return items.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join("");
+}
+
+function coursePath(course, library = store.getLibrary()) {
+  const category = library.categories.find((item) => item.id === course?.categoryId);
+  const subcategory = library.subcategories.find((item) => item.id === course?.subcategoryId);
+  return [category?.name, subcategory?.name].filter(Boolean).join(" / ");
+}
+
+function renderCourseFormSubcategories(categoryId, preferredId = "") {
+  const subcategories = store.getSubcategories(categoryId);
+  elements.courseSubcategory.innerHTML = namedOptions(subcategories, "请先新建子类");
+  elements.courseSubcategory.value = subcategories.some((item) => item.id === preferredId)
+    ? preferredId
+    : subcategories[0]?.id ?? "";
+  elements.courseSubcategory.disabled = !subcategories.length;
+}
+
+function hideCourseSearchResults() {
+  elements.courseSearchResults.hidden = true;
+  elements.courseSearchResults.innerHTML = "";
+}
+
+function renderCourseSearchResults() {
+  const query = elements.courseSearch.value.trim();
+  if (!query) {
+    hideCourseSearchResults();
+    return;
+  }
+  const library = store.getLibrary();
+  const matches = store.searchCourses(query).slice(0, 8);
+  elements.courseSearchResults.innerHTML = matches.length
+    ? matches.map((course) => `<button type="button" data-search-course-id="${escapeHtml(course.id)}">
+        <strong>${escapeHtml(course.name)}</strong>
+        <span>${escapeHtml(coursePath(course, library))}${course.description ? ` · ${escapeHtml(course.description)}` : ""}</span>
+      </button>`).join("")
+    : '<p class="course-search-empty">没有找到匹配课程</p>';
+  elements.courseSearchResults.hidden = false;
 }
 
 function currentContext() {
   const selection = store.getSelection();
   return {
     selection,
+    category: selection.categoryId ? store.getCategory(selection.categoryId) : null,
+    subcategory: selection.subcategoryId ? store.getSubcategory(selection.subcategoryId) : null,
     course: selection.courseId ? store.getCourse(selection.courseId) : null,
     pack: selection.packId ? store.getPack(selection.packId) : null
   };
 }
 
+function syncLearningChoice() {
+  learningChoice = { ...store.getSelection() };
+}
+
 function renderSelection() {
   const library = store.getLibrary();
-  const { selection, course, pack } = currentContext();
-  elements.studentCourse.innerHTML = courseOptions(library.courses);
-  elements.studentCourse.value = selection.courseId ?? "";
+  const category = library.categories.find((item) => item.id === learningChoice.categoryId) ?? null;
+  const subcategories = library.subcategories.filter((item) => item.categoryId === category?.id);
+  const subcategory = subcategories.find((item) => item.id === learningChoice.subcategoryId) ?? null;
+  const courses = library.courses.filter((item) => item.subcategoryId === subcategory?.id);
+  const course = courses.find((item) => item.id === learningChoice.courseId) ?? null;
+  const packs = library.packs.filter((item) => item.courseId === course?.id);
+  const pack = packs.find((item) => item.id === learningChoice.packId) ?? null;
 
-  const packs = library.packs.filter((candidate) => candidate.courseId === selection.courseId);
+  elements.studentCategory.innerHTML = namedOptions(library.categories, "请先新建大类");
+  elements.studentCategory.value = category?.id ?? "";
+  elements.studentSubcategory.innerHTML = namedOptions(subcategories, "当前大类暂无子类");
+  elements.studentSubcategory.value = subcategory?.id ?? "";
+  elements.studentCourse.innerHTML = courses.length
+    ? `<option value="">请选择课程</option>${namedOptions(courses, "")}`
+    : '<option value="">当前子类暂无课程</option>';
+  elements.studentCourse.value = course?.id ?? "";
   elements.studentPack.innerHTML = packs.length
     ? packs.map((candidate) => `<option value="${escapeHtml(candidate.id)}">${escapeHtml(candidate.title)}</option>`).join("")
     : '<option value="">当前课程暂无资料</option>';
-  elements.studentPack.value = selection.packId ?? "";
-  elements.studentCourse.disabled = controller.running || !library.courses.length;
-  elements.studentPack.disabled = controller.running || !packs.length;
+  elements.studentPack.value = pack?.id ?? "";
+  elements.studentCategory.disabled = controller.running || !library.categories.length;
+  elements.studentSubcategory.disabled = controller.running || !subcategories.length;
+  elements.studentCourse.disabled = controller.running || !courses.length;
+  elements.studentPack.disabled = controller.running || !course || !packs.length;
+  elements.courseSearch.disabled = controller.running || !library.courses.length;
 
   if (!pack) {
     elements.packBadge.textContent = course ? `${course.name} · 暂无资料` : "尚未选择学习资料";
     elements.packBadge.dataset.state = "empty";
-    elements.selectionNote.textContent = course ? "请为当前课程导入内容资料。" : "请先在资料管理中创建课程并导入内容。";
+    if (!category) elements.selectionNote.textContent = "请先在资料管理中创建大类、子类和课程。";
+    else if (!subcategory) elements.selectionNote.textContent = "请选择子类后再选择课程。";
+    else if (!course) elements.selectionNote.textContent = "请选择课程，或直接搜索课程名称。";
+    else elements.selectionNote.textContent = "请为当前课程导入内容资料。";
     if (!controller.running) elements.start.disabled = true;
   } else {
-    elements.packBadge.textContent = `${course?.name ?? "未分类"} · ${pack.title} · ${pack.items.length}项`;
+    elements.packBadge.textContent = `${category.name} · ${subcategory.name} · ${course.name} · ${pack.title}`;
     elements.packBadge.dataset.state = "ready";
     elements.selectionNote.textContent = `${pack.source.publisher} · ${pack.source.edition} · ${pack.items.length} 个学习项`;
     if (!controller.running) elements.start.disabled = false;
   }
-  renderPackSummary(course, pack);
+  renderPackSummary(category, subcategory, course, pack);
 }
 
-function renderPackSummary(course, pack) {
+function renderPackSummary(category, subcategory, course, pack) {
   if (!pack) {
     elements.packSummary.innerHTML = "<p>尚未选择学习资料。请在资料管理页创建课程并导入内容。</p>";
     return;
   }
   elements.packSummary.innerHTML = `
     <dl class="summary-grid">
+      <div><dt>大类</dt><dd>${escapeHtml(category?.name ?? "未分类")}</dd></div>
+      <div><dt>子类</dt><dd>${escapeHtml(subcategory?.name ?? "未分类")}</dd></div>
       <div><dt>课程</dt><dd>${escapeHtml(course?.name ?? "未分类")}</dd></div>
       <div><dt>资料</dt><dd>${escapeHtml(pack.title)}</dd></div>
       <div><dt>发布机构</dt><dd>${escapeHtml(pack.source.publisher)}</dd></div>
@@ -155,15 +231,36 @@ function renderLibrary({ keepFilter = true } = {}) {
   const library = store.getLibrary();
   const selection = store.getSelection();
   const previousFilter = keepFilter ? elements.libraryCourseFilter.value : "";
+  const previousSubcategoryCategoryId = keepFilter ? elements.subcategoryCategory.value : "";
+  const previousCourseCategoryId = keepFilter ? elements.courseCategory.value : "";
+  const previousCourseSubcategoryId = keepFilter ? elements.courseSubcategory.value : "";
   const filterCourseId = library.courses.some((course) => course.id === previousFilter)
     ? previousFilter
     : selection.courseId ?? library.courses[0]?.id ?? "";
 
-  elements.libraryCount.textContent = `${library.courses.length} 门课程 · ${library.packs.length} 份资料`;
+  elements.libraryCount.textContent = `${library.categories.length} 个大类 · ${library.subcategories.length} 个子类 · ${library.courses.length} 门课程 · ${library.packs.length} 份资料`;
+  elements.taxonomyList.innerHTML = library.categories.length ? library.categories.map((category) => {
+    const subcategories = library.subcategories.filter((item) => item.categoryId === category.id);
+    return `<article class="taxonomy-card">
+      <div class="taxonomy-title"><strong>${escapeHtml(category.name)}</strong><span>${subcategories.length} 个子类</span></div>
+      <div class="taxonomy-children">${subcategories.length ? subcategories.map((subcategory) => `
+        <div><span>${escapeHtml(subcategory.name)}</span><span class="inline-actions">
+          <button type="button" data-taxonomy-action="rename-subcategory" data-subcategory-id="${escapeHtml(subcategory.id)}">重命名</button>
+          <button type="button" data-taxonomy-action="delete-subcategory" data-subcategory-id="${escapeHtml(subcategory.id)}">删除</button>
+        </span></div>`).join("") : '<span class="muted-text">暂无子类</span>'}</div>
+      <div class="inline-actions">
+        <button type="button" data-taxonomy-action="rename-category" data-category-id="${escapeHtml(category.id)}">重命名大类</button>
+        <button type="button" data-taxonomy-action="delete-category" data-category-id="${escapeHtml(category.id)}">删除大类</button>
+      </div>
+    </article>`;
+  }).join("") : '<div class="mini-empty">还没有分类。</div>';
+
   elements.courseList.innerHTML = library.courses.length ? library.courses.map((course) => {
     const packCount = library.packs.filter((pack) => pack.courseId === course.id).length;
+    const category = library.categories.find((item) => item.id === course.categoryId);
+    const subcategory = library.subcategories.find((item) => item.id === course.subcategoryId);
     return `<article class="course-card${course.id === selection.courseId ? " is-selected" : ""}">
-      <div><strong>${escapeHtml(course.name)}</strong><span>${escapeHtml(course.description || "未填写课程说明")} · ${packCount} 份资料</span></div>
+      <div><strong>${escapeHtml(course.name)}</strong><span>${escapeHtml(category?.name)} / ${escapeHtml(subcategory?.name)} · ${escapeHtml(course.description || "未填写课程说明")} · ${packCount} 份资料</span></div>
       <div class="inline-actions">
         <button type="button" data-course-action="select" data-course-id="${escapeHtml(course.id)}">选择</button>
         <button type="button" data-course-action="rename" data-course-id="${escapeHtml(course.id)}">重命名</button>
@@ -172,7 +269,29 @@ function renderLibrary({ keepFilter = true } = {}) {
     </article>`;
   }).join("") : '<div class="mini-empty">还没有课程。</div>';
 
-  const options = courseOptions(library.courses);
+  const categoryOptions = namedOptions(library.categories, "请先新建大类");
+  elements.subcategoryCategory.innerHTML = categoryOptions;
+  elements.courseCategory.innerHTML = categoryOptions;
+  const formCategoryId = library.categories.some((item) => item.id === previousCourseCategoryId)
+    ? previousCourseCategoryId
+    : selection.categoryId ?? library.categories[0]?.id ?? "";
+  const subcategoryFormCategoryId = library.categories.some((item) => item.id === previousSubcategoryCategoryId)
+    ? previousSubcategoryCategoryId
+    : formCategoryId;
+  elements.subcategoryCategory.value = subcategoryFormCategoryId;
+  elements.courseCategory.value = formCategoryId;
+  const formSubcategories = library.subcategories.filter((item) => item.categoryId === formCategoryId);
+  elements.courseSubcategory.innerHTML = namedOptions(formSubcategories, "请先新建子类");
+  elements.courseSubcategory.value = formSubcategories.some((item) => item.id === previousCourseSubcategoryId)
+    ? previousCourseSubcategoryId
+    : formSubcategories.some((item) => item.id === selection.subcategoryId)
+      ? selection.subcategoryId
+    : formSubcategories[0]?.id ?? "";
+  elements.subcategoryCategory.disabled = !library.categories.length;
+  elements.courseCategory.disabled = !library.categories.length;
+  elements.courseSubcategory.disabled = !formSubcategories.length;
+
+  const options = namedOptions(library.courses, "请先新建课程");
   elements.libraryCourseFilter.innerHTML = options;
   elements.libraryCourseFilter.value = filterCourseId;
   elements.libraryCourseFilter.disabled = !library.courses.length;
@@ -193,6 +312,7 @@ function renderLibrary({ keepFilter = true } = {}) {
     </div>
   </article>`).join("");
 
+  syncLearningChoice();
   renderSelection();
 }
 
@@ -242,7 +362,9 @@ function renderHistory() {
     <article class="history-card">
       <div>
         <p class="history-date">${new Date(entry.completedAt).toLocaleString("zh-CN")}</p>
-        <h3>${escapeHtml(entry.courseName ? `${entry.courseName} · ${entry.packTitle}` : entry.packTitle)}</h3>
+        <h3>${escapeHtml(entry.courseName
+          ? [entry.categoryName, entry.subcategoryName, entry.courseName, entry.packTitle].filter(Boolean).join(" · ")
+          : entry.packTitle)}</h3>
       </div>
       <dl>
         <div><dt>正确</dt><dd>${entry.stats.correct}</dd></div>
@@ -261,6 +383,8 @@ class LearningController {
     this.recognizer = new BrowserRecognizer();
     this.engine = null;
     this.pack = null;
+    this.category = null;
+    this.subcategory = null;
     this.course = null;
     this.settings = null;
     this.running = false;
@@ -276,6 +400,8 @@ class LearningController {
     if (this.running) return;
     const context = currentContext();
     this.pack = context.pack;
+    this.category = context.category;
+    this.subcategory = context.subcategory;
     this.course = context.course;
     this.settings = store.getSettings();
     if (!this.pack) {
@@ -310,8 +436,12 @@ class LearningController {
     elements.start.disabled = true;
     elements.pause.disabled = false;
     elements.stop.disabled = false;
+    elements.studentCategory.disabled = true;
+    elements.studentSubcategory.disabled = true;
     elements.studentCourse.disabled = true;
     elements.studentPack.disabled = true;
+    elements.courseSearch.disabled = true;
+    hideCourseSearchResults();
     await this.requestWakeLock();
 
     try {
@@ -599,6 +729,10 @@ class LearningController {
     setStatus("今天的学习完成了", `正确 ${stats.correct} 次，待巩固 ${stats.incorrect} 次。`);
     await this.speaker.speak(`今天的学习完成了。正确${stats.correct}次，需要继续巩固${stats.incorrect}次。`, { lang: "zh-CN" });
     store.addHistory({
+      categoryId: this.category?.id,
+      categoryName: this.category?.name,
+      subcategoryId: this.subcategory?.id,
+      subcategoryName: this.subcategory?.name,
       courseId: this.course?.id,
       courseName: this.course?.name,
       packId: this.pack.id,
@@ -661,16 +795,138 @@ elements.pause.addEventListener("click", () => controller.requestCommand("pause"
 elements.stop.addEventListener("click", () => controller.requestCommand("stop"));
 elements.commandButtons.forEach((button) => button.addEventListener("click", () => controller.requestCommand(button.dataset.command)));
 
+elements.studentCategory.addEventListener("change", () => {
+  const categoryId = elements.studentCategory.value || null;
+  const subcategoryId = store.getSubcategories(categoryId)[0]?.id ?? null;
+  learningChoice = { categoryId, subcategoryId, courseId: null, packId: null };
+  elements.courseSearch.value = "";
+  hideCourseSearchResults();
+  renderSelection();
+});
+
+elements.studentSubcategory.addEventListener("change", () => {
+  learningChoice = {
+    categoryId: elements.studentCategory.value || null,
+    subcategoryId: elements.studentSubcategory.value || null,
+    courseId: null,
+    packId: null
+  };
+  elements.courseSearch.value = "";
+  hideCourseSearchResults();
+  renderSelection();
+});
+
 elements.studentCourse.addEventListener("change", () => {
-  if (!elements.studentCourse.value) return;
-  store.setSelection({ courseId: elements.studentCourse.value });
-  renderLibrary({ keepFilter: false });
+  const courseId = elements.studentCourse.value;
+  elements.courseSearch.value = "";
+  hideCourseSearchResults();
+  if (!courseId) {
+    learningChoice = { ...learningChoice, courseId: null, packId: null };
+    renderSelection();
+    return;
+  }
+  learningChoice = store.setSelection({ courseId });
+  renderSelection();
 });
 
 elements.studentPack.addEventListener("change", () => {
   if (!elements.studentCourse.value || !elements.studentPack.value) return;
-  store.setSelection({ courseId: elements.studentCourse.value, packId: elements.studentPack.value });
-  renderLibrary();
+  learningChoice = store.setSelection({ courseId: elements.studentCourse.value, packId: elements.studentPack.value });
+  renderSelection();
+});
+
+elements.courseSearch.addEventListener("input", renderCourseSearchResults);
+elements.courseSearch.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  const firstResult = elements.courseSearchResults.querySelector("[data-search-course-id]");
+  if (!firstResult) return;
+  event.preventDefault();
+  firstResult.click();
+});
+elements.courseSearchResults.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-search-course-id]");
+  if (!button) return;
+  learningChoice = store.setSelection({ courseId: button.dataset.searchCourseId });
+  elements.courseSearch.value = "";
+  hideCourseSearchResults();
+  renderSelection();
+});
+
+elements.categoryForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  try {
+    const data = new FormData(elements.categoryForm);
+    const category = store.saveCategory({ id: makeId("category", data.get("name")), name: data.get("name") });
+    elements.categoryForm.reset();
+    showMessage(elements.categoryMessage, `已添加大类“${category.name}”。`);
+    renderLibrary({ keepFilter: false });
+    elements.subcategoryCategory.value = category.id;
+    elements.courseCategory.value = category.id;
+    renderCourseFormSubcategories(category.id);
+  } catch (error) {
+    showMessage(elements.categoryMessage, error.message, "error");
+  }
+});
+
+elements.subcategoryForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  try {
+    const data = new FormData(elements.subcategoryForm);
+    const subcategory = store.saveSubcategory({
+      id: makeId("subcategory", data.get("name")),
+      categoryId: data.get("categoryId"),
+      name: data.get("name")
+    });
+    elements.subcategoryForm.elements.name.value = "";
+    showMessage(elements.subcategoryMessage, `已添加子类“${subcategory.name}”。`);
+    renderLibrary({ keepFilter: false });
+    elements.subcategoryCategory.value = subcategory.categoryId;
+    elements.courseCategory.value = subcategory.categoryId;
+    renderCourseFormSubcategories(subcategory.categoryId, subcategory.id);
+  } catch (error) {
+    showMessage(elements.subcategoryMessage, error.message, "error");
+  }
+});
+
+elements.courseCategory.addEventListener("change", () => {
+  renderCourseFormSubcategories(elements.courseCategory.value);
+});
+
+elements.taxonomyList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-taxonomy-action]");
+  if (!button) return;
+  try {
+    if (button.dataset.categoryId) {
+      const category = store.getCategory(button.dataset.categoryId);
+      if (!category) return;
+      if (button.dataset.taxonomyAction === "rename-category") {
+        const name = prompt("请输入新的大类名称：", category.name)?.trim();
+        if (!name || name === category.name) return;
+        store.saveCategory({ ...category, name });
+      }
+      if (button.dataset.taxonomyAction === "delete-category") {
+        if (!confirm(`确定删除大类“${category.name}”吗？只能删除不含子类和课程的大类。`)) return;
+        store.deleteCategory(category.id);
+      }
+    }
+    if (button.dataset.subcategoryId) {
+      const subcategory = store.getSubcategory(button.dataset.subcategoryId);
+      if (!subcategory) return;
+      if (button.dataset.taxonomyAction === "rename-subcategory") {
+        const name = prompt("请输入新的子类名称：", subcategory.name)?.trim();
+        if (!name || name === subcategory.name) return;
+        store.saveSubcategory({ ...subcategory, name });
+      }
+      if (button.dataset.taxonomyAction === "delete-subcategory") {
+        if (!confirm(`确定删除子类“${subcategory.name}”吗？只能删除不含课程的子类。`)) return;
+        store.deleteSubcategory(subcategory.id);
+      }
+    }
+    renderLibrary({ keepFilter: false });
+  } catch (error) {
+    const target = button.dataset.categoryId ? elements.categoryMessage : elements.subcategoryMessage;
+    showMessage(target, error.message, "error");
+  }
 });
 
 elements.courseForm.addEventListener("submit", (event) => {
@@ -679,6 +935,8 @@ elements.courseForm.addEventListener("submit", (event) => {
     const data = new FormData(elements.courseForm);
     const course = store.saveCourse({
       id: makeId("course", data.get("name")),
+      categoryId: data.get("categoryId"),
+      subcategoryId: data.get("subcategoryId"),
       name: data.get("name"),
       description: data.get("description")
     });
@@ -777,8 +1035,22 @@ elements.cancelPackEdit.addEventListener("click", () => resetPackForm(elements.p
 
 elements.loadDemo.addEventListener("click", () => {
   try {
-    let course = store.getCourses().find((candidate) => candidate.name === "演示课程");
-    if (!course) course = store.saveCourse({ id: makeId("course", "演示课程"), name: "演示课程", description: "不对应任何教材" });
+    let category = store.getCategories().find((candidate) => candidate.name === "演示内容");
+    if (!category) category = store.saveCategory({ id: makeId("category", "演示内容"), name: "演示内容" });
+    let subcategory = store.getSubcategories(category.id).find((candidate) => candidate.name === "英语演示");
+    if (!subcategory) {
+      subcategory = store.saveSubcategory({ id: makeId("subcategory", "英语演示"), categoryId: category.id, name: "英语演示" });
+    }
+    let course = store.getCourses(subcategory.id).find((candidate) => candidate.name === "演示课程");
+    if (!course) {
+      course = store.saveCourse({
+        id: makeId("course", "演示课程"),
+        categoryId: category.id,
+        subcategoryId: subcategory.id,
+        name: "演示课程",
+        description: "不对应任何教材"
+      });
+    }
     const pack = { ...validatePack(samplePack), courseId: course.id, updatedAt: new Date().toISOString() };
     store.savePack(pack);
     store.setSelection({ courseId: course.id, packId: pack.id });

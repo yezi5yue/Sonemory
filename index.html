@@ -13,7 +13,7 @@
     <title>Sonemory · 声声入忆</title>
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="./src/styles.css?v=0.2.0">
+    <link rel="stylesheet" href="./src/styles.css?v=0.3.0">
   </head>
   <body>
     <a class="skip-link" href="#main">跳到主要内容</a>
@@ -30,7 +30,7 @@
         <div>
           <p class="eyebrow">Listen · Practice · Remember</p>
           <h1>让孩子不看屏幕，<br><em>独立完成</em>一次学习。</h1>
-          <p class="hero-copy">家长按课程管理学习资料；孩子选定课程与内容后，Sonemory 负责自然发音、跟读、主动回忆、及时纠错与延迟重测。</p>
+          <p class="hero-copy">家长按大类、子类和课程管理学习资料；孩子选定内容后，Sonemory 负责自然发音、跟读、主动回忆、及时纠错与延迟重测。</p>
         </div>
         <aside class="principle-card" aria-label="产品原则">
           <span>01</span><p>不内置教材</p>
@@ -48,16 +48,28 @@
 
       <section class="view student-view" data-view="student">
         <section class="learning-selector" aria-labelledby="learning-selector-title">
-          <div>
+          <div class="learning-selector-heading">
             <p class="eyebrow">Learning scope</p>
             <h2 id="learning-selector-title">选择本次学习内容</h2>
           </div>
+          <label>大类
+            <select id="student-category" aria-label="选择大类"></select>
+          </label>
+          <label>子类
+            <select id="student-subcategory" aria-label="选择子类"></select>
+          </label>
           <label>课程
             <select id="student-course" aria-label="选择课程"></select>
           </label>
           <label>内容资料
             <select id="student-pack" aria-label="选择内容资料"></select>
           </label>
+          <div class="course-search">
+            <label>直接搜索课程
+              <input id="course-search" type="search" autocomplete="off" placeholder="输入课程名称或说明">
+            </label>
+            <div id="course-search-results" class="course-search-results" hidden></div>
+          </div>
           <p id="selection-note">请先在资料管理中创建课程并导入内容。</p>
         </section>
 
@@ -109,18 +121,40 @@
       <section class="view library-view" data-view="library" hidden>
         <div class="section-heading wide-heading">
           <div><p class="eyebrow">Content library</p><h2>课程与资料管理</h2></div>
-          <p>课程用于组织内容，资料用于承载可学习条目。所有导入内容默认只保存在当前浏览器。</p>
+          <p>大类和子类用于整理课程，资料用于承载可学习条目。名称和导入内容默认只保存在当前浏览器。</p>
         </div>
 
         <div class="library-layout">
           <div class="library-sidebar">
+            <form id="category-form" class="settings-card compact-card">
+              <h3>新建大类</h3>
+              <label>大类名称<input id="category-name" name="name" required maxlength="40" placeholder="例如：学校课程"></label>
+              <button class="primary-button" type="submit">添加大类</button>
+              <p id="category-message" class="form-message" hidden></p>
+            </form>
+
+            <form id="subcategory-form" class="settings-card compact-card">
+              <h3>新建子类</h3>
+              <label>所属大类<select id="subcategory-category" name="categoryId" required></select></label>
+              <label>子类名称<input id="subcategory-name" name="name" required maxlength="40" placeholder="例如：语言类"></label>
+              <button class="primary-button" type="submit">添加子类</button>
+              <p id="subcategory-message" class="form-message" hidden></p>
+            </form>
+
             <form id="course-form" class="settings-card compact-card">
               <h3>新建课程</h3>
+              <label>所属大类<select id="course-category" name="categoryId" required></select></label>
+              <label>所属子类<select id="course-subcategory" name="subcategoryId" required></select></label>
               <label>课程名称<input id="course-name" name="name" required maxlength="60" placeholder="例如：八年级英语"></label>
               <label>课程说明<input id="course-description" name="description" maxlength="120" placeholder="例如：2026 秋季学期"></label>
               <button class="primary-button" type="submit">添加课程</button>
               <p id="course-message" class="form-message" hidden></p>
             </form>
+
+            <section class="settings-card compact-card" aria-labelledby="taxonomy-list-title">
+              <div class="card-heading"><h3 id="taxonomy-list-title">分类设置</h3><span>本地自定义</span></div>
+              <div id="taxonomy-list" class="taxonomy-list"></div>
+            </section>
 
             <section class="settings-card compact-card" aria-labelledby="course-list-title">
               <div class="card-heading"><h3 id="course-list-title">已有课程</h3><span id="library-count"></span></div>
@@ -244,10 +278,10 @@
 
     <footer>
       <p>Sonemory · Listen. Practice. Remember.</p>
-      <p><a href="https://github.com/yezi5yue/Sonemory/tree/v0.2.0" rel="noopener">对应源码</a> · <a href="./LICENSE">AGPL-3.0</a> · 可按许可证复制和修改 · 不提供担保</p>
+      <p><a href="https://github.com/yezi5yue/Sonemory/tree/v0.3.0" rel="noopener">对应源码</a> · <a href="./LICENSE">AGPL-3.0</a> · 可按许可证复制和修改 · 不提供担保</p>
       <p>商业授权另行签署 · 不内置教材 · 不保存原始录音</p>
     </footer>
 
-    <script type="module" src="./src/app.js?v=0.2.0"></script>
+    <script type="module" src="./src/app.js?v=0.3.0"></script>
   </body>
 </html>

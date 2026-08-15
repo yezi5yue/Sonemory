@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-const CACHE = "sonemory-v0.2.0";
+const CACHE = "sonemory-v0.3.0";
 const ASSETS = [
   "./",
   "./index.html",
@@ -12,14 +12,14 @@ const ASSETS = [
   "./icon.svg",
   "./LICENSE",
   "./LICENSING.md",
-  "./src/styles.css?v=0.2.0",
-  "./src/app.js?v=0.2.0",
-  "./src/content.js?v=0.2.0",
-  "./src/engine.js?v=0.2.0",
-  "./src/notation.js?v=0.2.0",
-  "./src/sample-pack.js?v=0.2.0",
-  "./src/speech.js?v=0.2.0",
-  "./src/storage.js?v=0.2.0"
+  "./src/styles.css?v=0.3.0",
+  "./src/app.js?v=0.3.0",
+  "./src/content.js?v=0.3.0",
+  "./src/engine.js?v=0.3.0",
+  "./src/notation.js?v=0.3.0",
+  "./src/sample-pack.js?v=0.3.0",
+  "./src/speech.js?v=0.3.0",
+  "./src/storage.js?v=0.3.0"
 ];
 
 self.addEventListener("install", (event) => {

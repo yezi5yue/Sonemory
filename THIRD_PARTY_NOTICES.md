@@ -1,6 +1,6 @@
 # Third-party notices and dependency policy
 
-Version reviewed: Sonemory 0.2.0
+Version reviewed: Sonemory 0.3.0
 
 ## Current runtime inventory
 
