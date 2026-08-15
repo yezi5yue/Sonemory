@@ -13,6 +13,10 @@ Describe the problem, the proposed change, and why it belongs in Sonemory.
 
 External contributions cannot be merged without this confirmation:
 
-- [ ] **I have read and agree to the [Sonemory CLA](../CLA.md), and I have the authority to grant its licenses.**
+- Contribution capacity — select exactly one:
+  - [ ] I contribute in my personal capacity and own or control the relevant rights.
+  - [ ] I contribute for an organization that has a signed [Sonemory Entity CLA](../docs/legal/ENTITY-CLA-TEMPLATE.md) on file. Organization: `[LEGAL NAME]`.
+- [ ] **I have read and agree to the applicable Sonemory CLA, and I have the authority to grant its licenses.**
+- [ ] I identified every third-party component, model, dataset, audio file, font, or other asset and its license in this Pull Request.
 
-If an employer or another organization owns the Contribution, state the organization and the authority under which you submit it. The maintainer may require a separate organization-level agreement before merging.
+If an employer or another organization owns the Contribution, the individual CLA checkbox alone is insufficient. The maintainer must verify the organization record under the [CLA operations policy](../docs/cla-operations.md) before merging.

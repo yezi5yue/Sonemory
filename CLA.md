@@ -1,14 +1,16 @@
-# Sonemory Contributor License Agreement
+# Sonemory Individual Contributor License Agreement
 
-Version 1.0 — 15 August 2026
+Version 1.1 — 15 August 2026
 
 Thank you for contributing to Sonemory. This Contributor License Agreement (the **Agreement**) is between you (the **Contributor**) and the person or legal entity that controls the GitHub account `yezi5yue` and maintains the Sonemory project (the **Project Owner**).
 
-This is a legally significant agreement. Read it before submitting a contribution. If your employer or another organization owns the relevant rights, do not accept this Agreement on its behalf unless you are authorized to do so; contact the Project Owner for an organization-level agreement instead.
+This is a legally significant agreement. Read it before submitting a contribution. This individual agreement is not the correct instrument when your employer or another organization owns the relevant rights. In that case, contributions must wait until an authorized representative signs the [Sonemory Entity CLA](docs/legal/ENTITY-CLA-TEMPLATE.md).
+
+Before accepting the first external Contribution, the Project Owner should record its full legal name and notice details in the applicable acceptance record or signed agreement. The GitHub account definition identifies the repository controller but is not a substitute for accurate contracting-party details.
 
 ## 1. Definitions
 
-**Contribution** means any original work of authorship, code, documentation, design, test, data, or other material that you intentionally submit to the Sonemory repository for inclusion in the project. Communications conspicuously marked “Not a Contribution” are excluded.
+**Contribution** means any original work of authorship, code, documentation, design, test, data, or other material that you intentionally submit to the Sonemory repository for inclusion in the project. Communications conspicuously marked “Not a Contribution” are excluded. Third-party material is not covered merely because you submit it; it must be separately identified and lawfully licensed.
 
 **Submit** means sending a Contribution through a pull request, commit, patch, issue attachment, or another contribution channel controlled by the Project Owner.
 
@@ -43,7 +45,7 @@ You represent that:
 1. you have the legal authority to enter into this Agreement;
 2. you created the Contribution or otherwise have sufficient rights to grant every license in this Agreement;
 3. the Contribution does not knowingly violate another party's copyright, patent, confidentiality, privacy, employment, or contractual rights;
-4. you have obtained any required permission from your employer, school, client, or other rights holder;
+4. the Contribution is made in your personal capacity, and you have obtained any required permission from your employer, school, client, or other rights holder;
 5. you will identify any third-party material and its license in the pull request;
 6. the Contribution contains no confidential information, credentials, or identifiable children's data; and
 7. if you are below the age of legal majority where you live, you will not submit until the Project Owner has received legally sufficient consent from your parent or guardian.
@@ -54,11 +56,11 @@ The Project Owner is not required to accept or use a Contribution. Except for th
 
 ## 9. Electronic acceptance
 
-You accept this Agreement by submitting a pull request that includes the checked statement:
+You accept this Agreement by submitting a pull request that identifies your contribution capacity and includes the checked statement:
 
 > I have read and agree to the Sonemory CLA, and I have the authority to grant its licenses.
 
-Your GitHub account, pull-request record, checked statement, and submission timestamp form the electronic record of acceptance. A Contribution will not be merged until this acceptance is present. The Project Owner may require a separate signed document when authority or ownership is unclear.
+Your GitHub account, pull-request record, checked statement, Agreement version, and submission timestamp form the electronic record of acceptance. A Contribution will not be merged until this acceptance is present and recorded under [the CLA operations policy](docs/cla-operations.md). The Project Owner may require a separate signed document when identity, authority, or ownership is unclear.
 
 ## 10. General terms
 
@@ -70,4 +72,6 @@ Your GitHub account, pull-request record, checked statement, and submission time
 
 ## Template provenance
 
-This Agreement's licensing structure is informed by the Harmony Individual Contributor License Agreement, including its broad inbound license and outbound-license Option Five. Project Harmony's templates are available under Creative Commons Attribution 3.0. This Sonemory text has been adapted and simplified for repository-based contribution acceptance.
+This Agreement's licensing structure is informed by the [Harmony Individual Contributor License Agreement](https://www.harmonyagreements.org/docs/ha-cla-i-v1.pdf), including its broad inbound license and outbound-license Option Five. Project Harmony's templates are available under Creative Commons Attribution 3.0. This Sonemory text has been adapted and simplified for repository-based contribution acceptance.
+
+This CLA document is licensed under [Creative Commons Attribution 3.0 Unported](https://creativecommons.org/licenses/by/3.0/), rather than the software license in the repository root.

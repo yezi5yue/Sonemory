@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { packFromCsv, validatePack } from "./content.js?v=0.1.1";
-import { detectCommand, evaluateAnswer, SessionEngine } from "./engine.js?v=0.1.1";
-import { expandSpeechNotation, speechForms, toSpelling } from "./notation.js?v=0.1.1";
-import { samplePack } from "./sample-pack.js?v=0.1.1";
-import { BrowserRecognizer, BrowserSpeaker } from "./speech.js?v=0.1.1";
-import { store } from "./storage.js?v=0.1.1";
+import { packFromCsv, validatePack } from "./content.js?v=0.1.2";
+import { detectCommand, evaluateAnswer, SessionEngine } from "./engine.js?v=0.1.2";
+import { expandSpeechNotation, speechForms, toSpelling } from "./notation.js?v=0.1.2";
+import { samplePack } from "./sample-pack.js?v=0.1.2";
+import { BrowserRecognizer, BrowserSpeaker } from "./speech.js?v=0.1.2";
+import { store } from "./storage.js?v=0.1.2";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
