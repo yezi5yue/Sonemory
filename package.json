@@ -1,0 +1,18 @@
+{
+  "name": "sonemory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Audio-first, screen-light learning companion for independent practice and memory.",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "test": "node --test",
+    "check": "node scripts/check.mjs",
+    "verify": "node --test && node scripts/check.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "Apache-2.0"
+}

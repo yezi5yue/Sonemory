@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#10231f">
+    <meta name="description" content="Sonemory 是一个音频优先、无屏优先的语音陪学与记忆训练工具。">
+    <title>Sonemory · 声声入忆</title>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./src/styles.css?v=0.1.0">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <header class="site-header">
+      <a class="brand" href="#" aria-label="Sonemory 首页">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>
+          <strong>Sonemory</strong>
+          <small>声声入忆</small>
+        </span>
+      </a>
+      <div class="pack-pill" id="pack-badge" data-state="empty">尚未导入词表</div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Listen · Practice · Remember</p>
+          <h1>让孩子不看屏幕，<br><em>独立完成</em>一次学习。</h1>
+          <p class="hero-copy">教材由家长或教师提供；Sonemory 负责自然发音、分段拼读、跟读、主动回忆、及时纠错与延迟重测。</p>
+        </div>
+        <aside class="principle-card" aria-label="产品原则">
+          <span>01</span>
+          <p>不内置教材</p>
+          <span>02</span>
+          <p>不靠 AI 记进度</p>
+          <span>03</span>
+          <p>未听清不记错</p>
+        </aside>
+      </section>
+
+      <nav class="view-tabs" aria-label="功能区" role="tablist">
+        <button class="is-active" data-view-target="student" role="tab" aria-selected="true">学生学习</button>
+        <button data-view-target="parent" role="tab" aria-selected="false">家长设置</button>
+        <button data-view-target="report" role="tab" aria-selected="false">学习记录</button>
+      </nav>
+
+      <section class="view student-view" data-view="student">
+        <div class="audio-stage">
+          <div class="audio-orbit" aria-hidden="true">
+            <span></span><span></span><span></span><span></span>
+            <div class="audio-core">
+              <svg viewBox="0 0 48 48" aria-hidden="true">
+                <path d="M24 30c4.4 0 8-3.6 8-8V12a8 8 0 1 0-16 0v10c0 4.4 3.6 8 8 8Z"/>
+                <path d="M11 22a13 13 0 0 0 26 0M24 35v8M18 43h12"/>
+              </svg>
+            </div>
+          </div>
+          <div class="status-copy" aria-live="polite">
+            <p class="status-kicker">当前状态</p>
+            <h2 id="student-status">准备开始今天的学习</h2>
+            <p id="student-detail">家长导入词表后，孩子只需点击一次开始。</p>
+          </div>
+          <div class="progress-track" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span id="student-progress"></span>
+          </div>
+          <div class="primary-actions">
+            <button class="primary-button" id="start-session">
+              <span>开始语音学习</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+            </button>
+            <button class="quiet-button" id="pause-session" disabled>立即暂停</button>
+            <button class="quiet-button" id="stop-session" disabled>结束并保存</button>
+          </div>
+        </div>
+
+        <section class="command-panel" aria-labelledby="command-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Voice shortcuts</p>
+              <h2 id="command-title">孩子可以直接说</h2>
+            </div>
+            <p>网页暂停会立即中断播报；语音指令在系统聆听时立即生效。</p>
+          </div>
+          <div class="command-grid">
+            <button data-command="repeat"><strong>重复</strong><span>重播当前提示</span></button>
+            <button data-command="slower"><strong>慢一点</strong><span>降低单词语速</span></button>
+            <button data-command="spell"><strong>拼读</strong><span>播报字母拼写</span></button>
+            <button data-command="meaning"><strong>什么意思</strong><span>重播词性释义</span></button>
+            <button data-command="unknown"><strong>不会</strong><span>学习答案再重测</span></button>
+            <button data-command="pause"><strong>暂停</strong><span>保留当前位置</span></button>
+          </div>
+        </section>
+
+        <p class="browser-note"><strong>无屏优先，不等于锁屏运行。</strong>首次使用请允许麦克风权限；不同设备的后台麦克风限制可能不同。</p>
+      </section>
+
+      <section class="view parent-view" data-view="parent" hidden>
+        <div class="section-heading wide-heading">
+          <div>
+            <p class="eyebrow">Parent setup</p>
+            <h2>内容由家长与教师决定</h2>
+          </div>
+          <p>项目不默认提供教材。请只导入你有权使用、并已按官方版本核对的学习内容。</p>
+        </div>
+
+        <div class="parent-layout">
+          <form id="pack-form" class="settings-card">
+            <fieldset>
+              <legend><span>1</span> 资料来源</legend>
+              <div class="field-grid">
+                <label>资料名称<input name="title" required placeholder="例如：学校发布的八上词表"></label>
+                <label>发布机构/出版社<input name="publisher" required placeholder="请填写正式来源"></label>
+                <label>版本或版次<input name="edition" required placeholder="例如：2026秋季版"></label>
+                <label>补充来源说明<input name="reference" placeholder="通知、页码或内部资料说明"></label>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend><span>2</span> 导入词表</legend>
+              <label class="file-drop" for="pack-file">
+                <input id="pack-file" type="file" accept=".csv,text/csv">
+                <strong>选择 CSV 文件</strong>
+                <span>或在下方粘贴内容。文件只在当前浏览器中处理。</span>
+              </label>
+              <label>CSV 内容
+                <textarea id="csv-input" spellcheck="false" rows="9">word,meaning,partOfSpeech,unit,chunks,aliases,note,locale</textarea>
+              </label>
+              <p class="field-help">必需列：<code>word</code>、<code>meaning</code>；词性可留空。支持逗号 CSV，也支持用 <code>|</code> 分隔的三列表格。</p>
+            </fieldset>
+
+            <fieldset>
+              <legend><span>3</span> 学习节奏</legend>
+              <div class="field-grid compact-grid">
+                <label>每次新词数
+                  <select name="dailyCount">
+                    <option value="3">3个</option>
+                    <option value="5" selected>5个</option>
+                    <option value="8">8个</option>
+                    <option value="10">10个</option>
+                  </select>
+                </label>
+                <label>错词间隔
+                  <select name="retryGap">
+                    <option value="2">2题后</option>
+                    <option value="3" selected>3题后</option>
+                    <option value="5">5题后</option>
+                  </select>
+                </label>
+                <label>识别语言
+                  <select name="recognitionLocale">
+                    <option value="auto" selected>按英语词条自动匹配（推荐）</option>
+                    <option value="en-US">固定美式英语</option>
+                    <option value="en-GB">固定英式英语</option>
+                    <option value="zh-CN">中文指令优先</option>
+                  </select>
+                </label>
+                <label>单词发音
+                  <select name="voiceLocale">
+                    <option value="en-US" selected>美式英语</option>
+                    <option value="en-GB">英式英语</option>
+                  </select>
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="form-actions">
+              <button class="primary-button" type="submit">保存并用于学习</button>
+              <button class="text-button" type="button" id="load-demo">手动加载非教材演示包</button>
+            </div>
+            <p id="import-message" class="form-message" hidden></p>
+          </form>
+
+          <aside class="pack-card">
+            <p class="eyebrow">Current pack</p>
+            <h2>当前学习资料</h2>
+            <div id="pack-summary"></div>
+            <div class="privacy-box">
+              <strong>本地优先</strong>
+              <p>词表、学习进度和报告默认保存在当前浏览器，不上传原始录音。</p>
+            </div>
+            <button class="danger-button" id="clear-data" type="button">清除全部本地数据</button>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view report-view" data-view="report" hidden>
+        <div class="section-heading wide-heading">
+          <div>
+            <p class="eyebrow">Learning record</p>
+            <h2>只记录有用的学习信号</h2>
+          </div>
+          <p>知识错误与语音识别失败分开统计，避免把设备问题误判成孩子不会。</p>
+        </div>
+        <div id="empty-history" class="empty-state">
+          <div class="empty-icon" aria-hidden="true">↗</div>
+          <h3>还没有完成的学习记录</h3>
+          <p>完成第一次语音学习后，这里会显示正确、待巩固、跟读和未听清次数。</p>
+        </div>
+        <div id="history-list" class="history-list"></div>
+      </section>
+    </main>
+
+    <footer>
+      <p>Sonemory · Listen. Practice. Remember.</p>
+      <p>Apache-2.0 · 不内置教材 · 不保存原始录音</p>
+    </footer>
+
+  <script type="module" src="./src/app.js?v=0.1.0"></script>
+  </body>
+</html>
+
