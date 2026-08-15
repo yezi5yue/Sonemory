@@ -1,17 +1,23 @@
-const CACHE = "sonemory-v0.1.0";
+/*
+ * Sonemory - audio-first learning companion.
+ * Copyright (C) 2026 yezi5yue and Sonemory contributors.
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+const CACHE = "sonemory-v0.1.1";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./icon.svg",
-  "./src/styles.css?v=0.1.0",
-  "./src/app.js?v=0.1.0",
-  "./src/content.js?v=0.1.0",
-  "./src/engine.js?v=0.1.0",
-  "./src/notation.js?v=0.1.0",
-  "./src/sample-pack.js?v=0.1.0",
-  "./src/speech.js?v=0.1.0",
-  "./src/storage.js?v=0.1.0"
+  "./src/styles.css?v=0.1.1",
+  "./src/app.js?v=0.1.1",
+  "./src/content.js?v=0.1.1",
+  "./src/engine.js?v=0.1.1",
+  "./src/notation.js?v=0.1.1",
+  "./src/sample-pack.js?v=0.1.1",
+  "./src/speech.js?v=0.1.1",
+  "./src/storage.js?v=0.1.1"
 ];
 
 self.addEventListener("install", (event) => {

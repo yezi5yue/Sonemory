@@ -1,3 +1,9 @@
+/*
+ * Sonemory - audio-first learning companion.
+ * Copyright (C) 2026 yezi5yue and Sonemory contributors.
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 const KEYS = {
   pack: "sonemory.pack.v1",
   settings: "sonemory.settings.v2",

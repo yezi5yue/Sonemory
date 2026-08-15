@@ -1,3 +1,9 @@
+/*
+ * Sonemory - audio-first learning companion.
+ * Copyright (C) 2026 yezi5yue and Sonemory contributors.
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";

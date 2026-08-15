@@ -1,9 +1,15 @@
-import { packFromCsv, validatePack } from "./content.js?v=0.1.0";
-import { detectCommand, evaluateAnswer, SessionEngine } from "./engine.js?v=0.1.0";
-import { expandSpeechNotation, speechForms, toSpelling } from "./notation.js?v=0.1.0";
-import { samplePack } from "./sample-pack.js?v=0.1.0";
-import { BrowserRecognizer, BrowserSpeaker } from "./speech.js?v=0.1.0";
-import { store } from "./storage.js?v=0.1.0";
+/*
+ * Sonemory - audio-first learning companion.
+ * Copyright (C) 2026 yezi5yue and Sonemory contributors.
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+import { packFromCsv, validatePack } from "./content.js?v=0.1.1";
+import { detectCommand, evaluateAnswer, SessionEngine } from "./engine.js?v=0.1.1";
+import { expandSpeechNotation, speechForms, toSpelling } from "./notation.js?v=0.1.1";
+import { samplePack } from "./sample-pack.js?v=0.1.1";
+import { BrowserRecognizer, BrowserSpeaker } from "./speech.js?v=0.1.1";
+import { store } from "./storage.js?v=0.1.1";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
