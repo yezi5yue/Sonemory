@@ -51,10 +51,43 @@ export class BrowserRecognizer {
     this.Recognition = Recognition;
     this.active = null;
     this.activeResolve = null;
+    this.availabilityCache = new Map();
   }
 
   get supported() {
     return Boolean(this.Recognition);
+  }
+
+  get supportsOnDevice() {
+    return Boolean(this.Recognition?.available && this.Recognition?.install);
+  }
+
+  async onDeviceAvailability(lang, { refresh = false } = {}) {
+    if (!this.supportsOnDevice) return "unsupported";
+    if (!refresh && this.availabilityCache.has(lang)) return this.availabilityCache.get(lang);
+    try {
+      const availability = await this.Recognition.available({ langs: [lang], processLocally: true });
+      this.availabilityCache.set(lang, availability);
+      return availability;
+    } catch {
+      return "unsupported";
+    }
+  }
+
+  async installOnDevice(lang) {
+    if (!this.supportsOnDevice) return false;
+    try {
+      const installed = Boolean(await this.Recognition.install({ langs: [lang], processLocally: true }));
+      if (installed) this.availabilityCache.set(lang, "available");
+      return installed;
+    } catch {
+      return false;
+    }
+  }
+
+  async shouldProcessLocally(lang, mode = "auto-local") {
+    if (mode === "browser-service") return false;
+    return (await this.onDeviceAvailability(lang)) === "available";
   }
 
   abort() {
@@ -68,7 +101,7 @@ export class BrowserRecognizer {
     this.activeResolve = null;
   }
 
-  listen({ lang = "en-US", timeoutMs = 11000, phrases = [] } = {}) {
+  listen({ lang = "en-US", timeoutMs = 11000, phrases = [], processLocally = false } = {}) {
     if (!this.supported) {
       return Promise.resolve({ transcript: "", confidence: null, alternatives: [], unsupported: true });
     }
@@ -90,6 +123,7 @@ export class BrowserRecognizer {
       recognition.continuous = false;
       recognition.interimResults = false;
       recognition.maxAlternatives = 5;
+      if ("processLocally" in recognition) recognition.processLocally = Boolean(processLocally);
       const Phrase = globalThis.SpeechRecognitionPhrase;
       if (Phrase && "phrases" in recognition && phrases.length) {
         try {

@@ -1,6 +1,6 @@
 {
   "name": "sonemory",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Audio-first, screen-light learning companion for independent practice and memory.",

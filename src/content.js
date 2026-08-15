@@ -114,8 +114,45 @@ export function packFromCsv(text, metadata) {
       reference: metadata.reference
     },
     importedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     items
   });
+}
+
+function csvCell(value) {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+export function packToCsv(pack) {
+  const headers = ["word", "meaning", "partOfSpeech", "unit", "chunks", "aliases", "note", "locale"];
+  const rows = (pack?.items ?? []).map((item) => [
+    item.word,
+    item.meaning,
+    item.partOfSpeech === "未标注" ? "" : item.partOfSpeech,
+    item.unit === "未分组" ? "" : item.unit,
+    (item.chunks ?? []).join("|"),
+    (item.aliases ?? []).join("|"),
+    item.note,
+    item.locale
+  ].map(csvCell).join(","));
+  return [headers.join(","), ...rows].join("\n");
+}
+
+export function mergePackUpdate(existingPack, importedPack) {
+  if (!existingPack?.id) return structuredClone(importedPack);
+  const existingItems = new Map(
+    (existingPack.items ?? []).map((item) => [String(item.word).trim().toLowerCase(), item])
+  );
+  const merged = structuredClone(importedPack);
+  merged.id = existingPack.id;
+  merged.importedAt = existingPack.importedAt ?? importedPack.importedAt;
+  merged.updatedAt = new Date().toISOString();
+  merged.items = merged.items.map((item) => {
+    const previous = existingItems.get(String(item.word).trim().toLowerCase());
+    return previous ? { ...item, id: previous.id } : item;
+  });
+  return merged;
 }
 
 export function validatePack(pack) {

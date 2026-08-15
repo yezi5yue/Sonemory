@@ -38,6 +38,7 @@ const required = [
   ".github/pull_request_template.md",
   "TRADEMARKS.md",
   "docs/licensing-strategy.md",
+  "docs/speech-roadmap.md",
   "docs/cla-operations.md",
   "docs/legal/ENTITY-CLA-TEMPLATE.md",
   "docs/legal/COMMERCIAL-LICENSE-AGREEMENT-TEMPLATE.md"
@@ -57,7 +58,19 @@ for (const file of required.filter((path) => path.endsWith(".js") || path.endsWi
 }
 
 const html = readFileSync("index.html", "utf8");
-for (const id of ["start-session", "pause-session", "pack-form", "csv-input", "history-list"]) {
+for (const id of [
+  "start-session",
+  "pause-session",
+  "student-course",
+  "student-pack",
+  "course-form",
+  "material-list",
+  "pack-form",
+  "csv-input",
+  "settings-form",
+  "prepare-local-speech",
+  "history-list"
+]) {
   if (!html.includes(`id="${id}"`)) throw new Error(`index.html is missing #${id}`);
 }
 

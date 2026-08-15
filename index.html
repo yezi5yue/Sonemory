@@ -13,19 +13,16 @@
     <title>Sonemory · 声声入忆</title>
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./src/styles.css?v=0.1.2">
+    <link rel="stylesheet" href="./src/styles.css?v=0.2.0">
   </head>
   <body>
     <a class="skip-link" href="#main">跳到主要内容</a>
     <header class="site-header">
       <a class="brand" href="#" aria-label="Sonemory 首页">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span>
-          <strong>Sonemory</strong>
-          <small>声声入忆</small>
-        </span>
+        <span><strong>Sonemory</strong><small>声声入忆</small></span>
       </a>
-      <div class="pack-pill" id="pack-badge" data-state="empty">尚未导入词表</div>
+      <div class="pack-pill" id="pack-badge" data-state="empty">尚未选择学习资料</div>
     </header>
 
     <main id="main">
@@ -33,25 +30,37 @@
         <div>
           <p class="eyebrow">Listen · Practice · Remember</p>
           <h1>让孩子不看屏幕，<br><em>独立完成</em>一次学习。</h1>
-          <p class="hero-copy">教材由家长或教师提供；Sonemory 负责自然发音、分段拼读、跟读、主动回忆、及时纠错与延迟重测。</p>
+          <p class="hero-copy">家长按课程管理学习资料；孩子选定课程与内容后，Sonemory 负责自然发音、跟读、主动回忆、及时纠错与延迟重测。</p>
         </div>
         <aside class="principle-card" aria-label="产品原则">
-          <span>01</span>
-          <p>不内置教材</p>
-          <span>02</span>
-          <p>不靠 AI 记进度</p>
-          <span>03</span>
-          <p>未听清不记错</p>
+          <span>01</span><p>不内置教材</p>
+          <span>02</span><p>资料本地管理</p>
+          <span>03</span><p>未听清不记错</p>
         </aside>
       </section>
 
       <nav class="view-tabs" aria-label="功能区" role="tablist">
         <button class="is-active" data-view-target="student" role="tab" aria-selected="true">学生学习</button>
-        <button data-view-target="parent" role="tab" aria-selected="false">家长设置</button>
+        <button data-view-target="library" role="tab" aria-selected="false">资料管理</button>
+        <button data-view-target="settings" role="tab" aria-selected="false">学习设置</button>
         <button data-view-target="report" role="tab" aria-selected="false">学习记录</button>
       </nav>
 
       <section class="view student-view" data-view="student">
+        <section class="learning-selector" aria-labelledby="learning-selector-title">
+          <div>
+            <p class="eyebrow">Learning scope</p>
+            <h2 id="learning-selector-title">选择本次学习内容</h2>
+          </div>
+          <label>课程
+            <select id="student-course" aria-label="选择课程"></select>
+          </label>
+          <label>内容资料
+            <select id="student-pack" aria-label="选择内容资料"></select>
+          </label>
+          <p id="selection-note">请先在资料管理中创建课程并导入内容。</p>
+        </section>
+
         <div class="audio-stage">
           <div class="audio-orbit" aria-hidden="true">
             <span></span><span></span><span></span><span></span>
@@ -65,7 +74,7 @@
           <div class="status-copy" aria-live="polite">
             <p class="status-kicker">当前状态</p>
             <h2 id="student-status">准备开始今天的学习</h2>
-            <p id="student-detail">家长导入词表后，孩子只需点击一次开始。</p>
+            <p id="student-detail">选择课程与资料后，孩子只需点击一次开始。</p>
           </div>
           <div class="progress-track" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
             <span id="student-progress"></span>
@@ -82,10 +91,7 @@
 
         <section class="command-panel" aria-labelledby="command-title">
           <div class="section-heading">
-            <div>
-              <p class="eyebrow">Voice shortcuts</p>
-              <h2 id="command-title">孩子可以直接说</h2>
-            </div>
+            <div><p class="eyebrow">Voice shortcuts</p><h2 id="command-title">孩子可以直接说</h2></div>
             <p>网页暂停会立即中断播报；语音指令在系统聆听时立即生效。</p>
           </div>
           <div class="command-grid">
@@ -97,94 +103,127 @@
             <button data-command="pause"><strong>暂停</strong><span>保留当前位置</span></button>
           </div>
         </section>
-
-        <p class="browser-note"><strong>无屏优先，不等于锁屏运行。</strong>首次使用请允许麦克风权限；不同设备的后台麦克风限制可能不同。</p>
+        <p class="browser-note"><strong>无屏优先，不等于锁屏运行。</strong>首次使用请允许麦克风权限；设备端识别需要浏览器支持并提前安装对应语言包。</p>
       </section>
 
-      <section class="view parent-view" data-view="parent" hidden>
+      <section class="view library-view" data-view="library" hidden>
         <div class="section-heading wide-heading">
-          <div>
-            <p class="eyebrow">Parent setup</p>
-            <h2>内容由家长与教师决定</h2>
-          </div>
-          <p>项目不默认提供教材。请只导入你有权使用、并已按官方版本核对的学习内容。</p>
+          <div><p class="eyebrow">Content library</p><h2>课程与资料管理</h2></div>
+          <p>课程用于组织内容，资料用于承载可学习条目。所有导入内容默认只保存在当前浏览器。</p>
         </div>
 
-        <div class="parent-layout">
+        <div class="library-layout">
+          <div class="library-sidebar">
+            <form id="course-form" class="settings-card compact-card">
+              <h3>新建课程</h3>
+              <label>课程名称<input id="course-name" name="name" required maxlength="60" placeholder="例如：八年级英语"></label>
+              <label>课程说明<input id="course-description" name="description" maxlength="120" placeholder="例如：2026 秋季学期"></label>
+              <button class="primary-button" type="submit">添加课程</button>
+              <p id="course-message" class="form-message" hidden></p>
+            </form>
+
+            <section class="settings-card compact-card" aria-labelledby="course-list-title">
+              <div class="card-heading"><h3 id="course-list-title">已有课程</h3><span id="library-count"></span></div>
+              <div id="course-list" class="course-list"></div>
+            </section>
+
+            <section class="settings-card compact-card" aria-labelledby="material-list-title">
+              <div class="card-heading"><h3 id="material-list-title">内容资料</h3><select id="library-course-filter" aria-label="筛选课程"></select></div>
+              <div id="empty-library" class="mini-empty">当前课程还没有资料。</div>
+              <div id="material-list" class="material-list"></div>
+            </section>
+          </div>
+
           <form id="pack-form" class="settings-card">
+            <input id="editing-pack-id" name="packId" type="hidden">
+            <div class="form-title-row">
+              <div><p class="eyebrow">Material editor</p><h2 id="pack-form-title">导入新资料</h2></div>
+              <button class="text-button" type="button" id="cancel-pack-edit" hidden>取消编辑</button>
+            </div>
             <fieldset>
-              <legend><span>1</span> 资料来源</legend>
+              <legend><span>1</span> 归属与来源</legend>
               <div class="field-grid">
-                <label>资料名称<input name="title" required placeholder="例如：学校发布的八上词表"></label>
+                <label>所属课程<select id="pack-course" name="courseId" required></select></label>
+                <label>资料名称<input name="title" required placeholder="例如：Unit 1 单词"></label>
                 <label>发布机构/出版社<input name="publisher" required placeholder="请填写正式来源"></label>
                 <label>版本或版次<input name="edition" required placeholder="例如：2026秋季版"></label>
-                <label>补充来源说明<input name="reference" placeholder="通知、页码或内部资料说明"></label>
+                <label class="wide-field">补充来源说明<input name="reference" placeholder="通知、页码或内部资料说明"></label>
               </div>
             </fieldset>
-
             <fieldset>
-              <legend><span>2</span> 导入词表</legend>
+              <legend><span>2</span> 内容材料</legend>
               <label class="file-drop" for="pack-file">
                 <input id="pack-file" type="file" accept=".csv,text/csv">
                 <strong>选择 CSV 文件</strong>
-                <span>或在下方粘贴内容。文件只在当前浏览器中处理。</span>
+                <span>或在下方粘贴内容。编辑已有资料时会显示当前完整内容。</span>
               </label>
               <label>CSV 内容
-                <textarea id="csv-input" spellcheck="false" rows="9">word,meaning,partOfSpeech,unit,chunks,aliases,note,locale</textarea>
+                <textarea id="csv-input" spellcheck="false" rows="12">word,meaning,partOfSpeech,unit,chunks,aliases,note,locale</textarea>
               </label>
               <p class="field-help">必需列：<code>word</code>、<code>meaning</code>；词性可留空。支持逗号 CSV，也支持用 <code>|</code> 分隔的三列表格。</p>
             </fieldset>
+            <div class="form-actions">
+              <button class="primary-button" type="submit">保存资料并设为学习内容</button>
+              <button class="text-button" type="button" id="load-demo">添加非教材演示资料</button>
+            </div>
+            <p id="import-message" class="form-message" hidden></p>
+          </form>
+        </div>
+      </section>
 
+      <section class="view settings-view" data-view="settings" hidden>
+        <div class="section-heading wide-heading">
+          <div><p class="eyebrow">Learning & speech</p><h2>学习与语音设置</h2></div>
+          <p>设备端识别可降低网络依赖并改善隐私，但准确率仍受设备、模型、儿童音色和环境噪声影响。</p>
+        </div>
+        <div class="settings-layout">
+          <form id="settings-form" class="settings-card">
             <fieldset>
-              <legend><span>3</span> 学习节奏</legend>
-              <div class="field-grid compact-grid">
+              <legend><span>1</span> 学习节奏</legend>
+              <div class="field-grid">
                 <label>每次新词数
-                  <select name="dailyCount">
-                    <option value="3">3个</option>
-                    <option value="5" selected>5个</option>
-                    <option value="8">8个</option>
-                    <option value="10">10个</option>
-                  </select>
+                  <select name="dailyCount"><option value="3">3个</option><option value="5">5个</option><option value="8">8个</option><option value="10">10个</option></select>
                 </label>
                 <label>错词间隔
-                  <select name="retryGap">
-                    <option value="2">2题后</option>
-                    <option value="3" selected>3题后</option>
-                    <option value="5">5题后</option>
+                  <select name="retryGap"><option value="2">2题后</option><option value="3">3题后</option><option value="5">5题后</option></select>
+                </label>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend><span>2</span> 语音能力</legend>
+              <div class="field-grid">
+                <label>识别引擎
+                  <select name="recognitionMode">
+                    <option value="auto-local">设备端优先，自动回退（推荐）</option>
+                    <option value="local-only">仅使用设备端识别</option>
+                    <option value="browser-service">使用浏览器默认识别服务</option>
                   </select>
                 </label>
                 <label>识别语言
                   <select name="recognitionLocale">
-                    <option value="auto" selected>按英语词条自动匹配（推荐）</option>
+                    <option value="auto">按资料词条自动匹配</option>
                     <option value="en-US">固定美式英语</option>
                     <option value="en-GB">固定英式英语</option>
-                    <option value="zh-CN">中文指令优先</option>
+                    <option value="zh-CN">固定普通话</option>
                   </select>
                 </label>
                 <label>单词发音
-                  <select name="voiceLocale">
-                    <option value="en-US" selected>美式英语</option>
-                    <option value="en-GB">英式英语</option>
-                  </select>
+                  <select name="voiceLocale"><option value="en-US">美式英语</option><option value="en-GB">英式英语</option></select>
                 </label>
               </div>
+              <div class="speech-diagnostic">
+                <div><strong>设备端语言包</strong><p id="speech-capability">尚未检测。</p></div>
+                <button class="quiet-ink-button" id="prepare-local-speech" type="button">检测并准备语言包</button>
+              </div>
             </fieldset>
-
-            <div class="form-actions">
-              <button class="primary-button" type="submit">保存并用于学习</button>
-              <button class="text-button" type="button" id="load-demo">手动加载非教材演示包</button>
-            </div>
-            <p id="import-message" class="form-message" hidden></p>
+            <button class="primary-button" type="submit">保存学习设置</button>
+            <p id="settings-message" class="form-message" hidden></p>
           </form>
-
           <aside class="pack-card">
-            <p class="eyebrow">Current pack</p>
-            <h2>当前学习资料</h2>
+            <p class="eyebrow">Local-first</p>
+            <h2>本地数据说明</h2>
             <div id="pack-summary"></div>
-            <div class="privacy-box">
-              <strong>本地优先</strong>
-              <p>词表、学习进度和报告默认保存在当前浏览器，不上传原始录音。</p>
-            </div>
+            <div class="privacy-box"><strong>默认不上传原始录音</strong><p>浏览器默认语音服务是否联网由浏览器实现决定；选择“仅设备端”后，识别必须在设备上完成。</p></div>
             <button class="danger-button" id="clear-data" type="button">清除全部本地数据</button>
           </aside>
         </div>
@@ -192,15 +231,11 @@
 
       <section class="view report-view" data-view="report" hidden>
         <div class="section-heading wide-heading">
-          <div>
-            <p class="eyebrow">Learning record</p>
-            <h2>只记录有用的学习信号</h2>
-          </div>
-          <p>知识错误与语音识别失败分开统计，避免把设备问题误判成孩子不会。</p>
+          <div><p class="eyebrow">Learning record</p><h2>只记录有用的学习信号</h2></div>
+          <p>记录会标明课程和资料；知识错误与语音识别失败分开统计。</p>
         </div>
         <div id="empty-history" class="empty-state">
-          <div class="empty-icon" aria-hidden="true">↗</div>
-          <h3>还没有完成的学习记录</h3>
+          <div class="empty-icon" aria-hidden="true">↗</div><h3>还没有完成的学习记录</h3>
           <p>完成第一次语音学习后，这里会显示正确、待巩固、跟读和未听清次数。</p>
         </div>
         <div id="history-list" class="history-list"></div>
@@ -209,11 +244,10 @@
 
     <footer>
       <p>Sonemory · Listen. Practice. Remember.</p>
-      <p><a href="https://github.com/yezi5yue/Sonemory/tree/v0.1.2" rel="noopener">对应源码</a> · <a href="./LICENSE">AGPL-3.0</a> · 可按许可证复制和修改 · 不提供担保</p>
+      <p><a href="https://github.com/yezi5yue/Sonemory/tree/v0.2.0" rel="noopener">对应源码</a> · <a href="./LICENSE">AGPL-3.0</a> · 可按许可证复制和修改 · 不提供担保</p>
       <p>商业授权另行签署 · 不内置教材 · 不保存原始录音</p>
     </footer>
 
-  <script type="module" src="./src/app.js?v=0.1.2"></script>
+    <script type="module" src="./src/app.js?v=0.2.0"></script>
   </body>
 </html>
-

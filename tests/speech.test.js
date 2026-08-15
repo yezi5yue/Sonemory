@@ -56,3 +56,37 @@ test("browser recognizer applies contextual phrase bias when supported", async (
     else globalThis.SpeechRecognitionPhrase = previousPhrase;
   }
 });
+
+test("browser recognizer detects and installs on-device language packs", async () => {
+  class FakeRecognition {
+    static async available(options) {
+      assert.deepEqual(options, { langs: ["en-US"], processLocally: true });
+      return "downloadable";
+    }
+    static async install(options) {
+      assert.deepEqual(options, { langs: ["en-US"], processLocally: true });
+      return true;
+    }
+  }
+  const recognizer = new BrowserRecognizer(FakeRecognition);
+  assert.equal(recognizer.supportsOnDevice, true);
+  assert.equal(await recognizer.onDeviceAvailability("en-US"), "downloadable");
+  assert.equal(await recognizer.installOnDevice("en-US"), true);
+});
+
+test("browser recognizer requests local processing when selected", async () => {
+  class FakeRecognition {
+    constructor() {
+      this.processLocally = false;
+      FakeRecognition.instance = this;
+    }
+    start() {
+      this.onresult({ results: [[{ transcript: "teacher", confidence: 0.9 }]] });
+    }
+    abort() {}
+    stop() {}
+  }
+  const recognizer = new BrowserRecognizer(FakeRecognition);
+  await recognizer.listen({ processLocally: true });
+  assert.equal(FakeRecognition.instance.processLocally, true);
+});

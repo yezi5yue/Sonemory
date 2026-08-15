@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { packFromCsv, parseCsv, splitList, validatePack } from "../src/content.js";
+import { mergePackUpdate, packFromCsv, packToCsv, parseCsv, splitList, validatePack } from "../src/content.js";
 import { toSpelling } from "../src/notation.js";
 import { samplePack } from "../src/sample-pack.js";
 
@@ -75,5 +75,34 @@ test("sample pack is valid and explicitly non-textbook", () => {
 test("helpers keep deterministic spelling and list parsing", () => {
   assert.equal(toSpelling("teacher"), "t，e，a，c，h，e，r");
   assert.deepEqual(splitList("teach|er；ending"), ["teach", "er", "ending"]);
+});
+
+test("packToCsv round-trips editable material content", () => {
+  const original = packFromCsv(
+    'word,meaning,partOfSpeech,note\nteacher,"教师,老师",名词,"say ""hello"""',
+    { title: "测试词表", publisher: "学校", edition: "2026", locale: "en-US" }
+  );
+  const restored = packFromCsv(packToCsv(original), {
+    title: original.title,
+    publisher: original.source.publisher,
+    edition: original.source.edition,
+    locale: original.locale
+  });
+  assert.equal(restored.items[0].meaning, "教师,老师");
+  assert.equal(restored.items[0].note, 'say "hello"');
+});
+
+test("mergePackUpdate preserves material and matching item identities", () => {
+  const existing = packFromCsv("word,meaning\nteacher,教师", {
+    title: "旧名称", publisher: "学校", edition: "2026", locale: "en-US"
+  });
+  const incoming = packFromCsv("word,meaning\nteacher,老师\nstudent,学生", {
+    title: "新名称", publisher: "学校", edition: "2026", locale: "en-US"
+  });
+  const updated = mergePackUpdate(existing, incoming);
+  assert.equal(updated.id, existing.id);
+  assert.equal(updated.items[0].id, existing.items[0].id);
+  assert.equal(updated.items[0].meaning, "老师");
+  assert.equal(updated.items.length, 2);
 });
 
